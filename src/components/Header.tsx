@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Lightbulb, Menu } from "lucide-react";
+import { Lightbulb, Menu, Plus } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -10,12 +11,12 @@ const Header = () => {
       <div className="container mx-auto px-4 md:px-6">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-gradient-hero flex items-center justify-center shadow-glow">
               <Lightbulb className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="font-display font-bold text-xl">IdeaHunt</span>
-          </div>
+          </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
@@ -35,8 +36,11 @@ const Header = () => {
             <Button variant="ghost" size="sm">
               Log in
             </Button>
-            <Button variant="hero" size="sm">
-              Get Started
+            <Button variant="hero" size="sm" asChild>
+              <Link to="/submit">
+                <Plus className="w-4 h-4 mr-1" />
+                Submit Idea
+              </Link>
             </Button>
           </div>
 
@@ -68,8 +72,11 @@ const Header = () => {
                 <Button variant="ghost" size="sm" className="flex-1">
                   Log in
                 </Button>
-                <Button variant="hero" size="sm" className="flex-1">
-                  Get Started
+                <Button variant="hero" size="sm" className="flex-1" asChild>
+                  <Link to="/submit">
+                    <Plus className="w-4 h-4 mr-1" />
+                    Submit Idea
+                  </Link>
                 </Button>
               </div>
             </nav>
