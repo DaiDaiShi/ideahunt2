@@ -1,7 +1,9 @@
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Heart, DollarSign, Bell, MessageCircle, Eye } from "lucide-react";
 
 interface IdeaCardProps {
+  id: string;
   title: string;
   description: string;
   author: string;
@@ -16,6 +18,7 @@ interface IdeaCardProps {
 }
 
 const IdeaCard = ({
+  id,
   title,
   description,
   author,
@@ -29,7 +32,8 @@ const IdeaCard = ({
   mockupGradient,
 }: IdeaCardProps) => {
   return (
-    <div className="group bg-gradient-card rounded-2xl border border-border/50 overflow-hidden shadow-soft hover:shadow-medium transition-all duration-300 hover:-translate-y-1">
+    <Link to={`/idea/${id}`} className="block group">
+      <div className="bg-gradient-card rounded-2xl border border-border/50 overflow-hidden shadow-soft hover:shadow-medium transition-all duration-300 hover:-translate-y-1">
       {/* Mockup Preview */}
       <div className={`h-48 ${mockupGradient} relative overflow-hidden`}>
         <div className="absolute inset-4 bg-card/90 backdrop-blur rounded-lg shadow-soft flex items-center justify-center">
@@ -91,7 +95,8 @@ const IdeaCard = ({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </Link>
   );
 };
 

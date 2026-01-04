@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 const ideas = [
   {
+    id: "1",
     title: "AI Recipe Generator for Dietary Restrictions",
     description: "An app that creates personalized meal plans and recipes based on allergies, preferences, and what's already in your fridge.",
     author: "Sarah Chen",
@@ -17,6 +18,7 @@ const ideas = [
     mockupGradient: "bg-gradient-to-br from-green-400/30 to-emerald-500/30",
   },
   {
+    id: "2",
     title: "Remote Team Mood Tracker",
     description: "A lightweight daily check-in tool that helps remote managers understand team morale and spot burnout before it happens.",
     author: "Marcus Johnson",
@@ -30,6 +32,7 @@ const ideas = [
     mockupGradient: "bg-gradient-to-br from-blue-400/30 to-indigo-500/30",
   },
   {
+    id: "3",
     title: "Subscription Spending Analyzer",
     description: "Connect your bank account and get instant insights on recurring charges, with one-click cancellation for unused subscriptions.",
     author: "Emma Williams",
@@ -43,6 +46,7 @@ const ideas = [
     mockupGradient: "bg-gradient-to-br from-amber-400/30 to-orange-500/30",
   },
   {
+    id: "4",
     title: "AI-Powered Plant Care Assistant",
     description: "Snap a photo of your plant to identify it, diagnose issues, and get personalized watering reminders based on your home's conditions.",
     author: "Alex Rivera",
@@ -56,6 +60,7 @@ const ideas = [
     mockupGradient: "bg-gradient-to-br from-teal-400/30 to-cyan-500/30",
   },
   {
+    id: "5",
     title: "Freelancer Invoice Automation",
     description: "Auto-generate professional invoices from your calendar events and time tracking, with built-in payment reminders.",
     author: "David Kim",
@@ -69,6 +74,7 @@ const ideas = [
     mockupGradient: "bg-gradient-to-br from-purple-400/30 to-violet-500/30",
   },
   {
+    id: "6",
     title: "Neighborhood Safety Alerts",
     description: "Community-driven safety notifications with verified reports, real-time crime mapping, and direct communication with local authorities.",
     author: "Lisa Park",
