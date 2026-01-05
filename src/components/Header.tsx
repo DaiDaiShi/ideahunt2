@@ -1,10 +1,23 @@
 import { Button } from "@/components/ui/button";
-import { Lightbulb, Menu, Plus } from "lucide-react";
+import { Lightbulb, Menu, Plus, LogOut, User } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
@@ -33,15 +46,42 @@ const Header = () => {
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center gap-3">
-            <Button variant="ghost" size="sm">
-              Log in
-            </Button>
-            <Button variant="hero" size="sm" asChild>
-              <Link to="/submit">
-                <Plus className="w-4 h-4 mr-1" />
-                Submit Idea
-              </Link>
-            </Button>
+            {user ? (
+              <>
+                <Button variant="hero" size="sm" asChild>
+                  <Link to="/submit">
+                    <Plus className="w-4 h-4 mr-1" />
+                    Submit Idea
+                  </Link>
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="icon" className="rounded-full">
+                      <User className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem className="text-muted-foreground text-sm">
+                      {user.email}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Sign out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/auth">Log in</Link>
+                </Button>
+                <Button variant="hero" size="sm" asChild>
+                  <Link to="/auth">Get Started</Link>
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -69,15 +109,28 @@ const Header = () => {
                 Pricing
               </a>
               <div className="flex gap-3 pt-2">
-                <Button variant="ghost" size="sm" className="flex-1">
-                  Log in
-                </Button>
-                <Button variant="hero" size="sm" className="flex-1" asChild>
-                  <Link to="/submit">
-                    <Plus className="w-4 h-4 mr-1" />
-                    Submit Idea
-                  </Link>
-                </Button>
+                {user ? (
+                  <>
+                    <Button variant="hero" size="sm" className="flex-1" asChild>
+                      <Link to="/submit">
+                        <Plus className="w-4 h-4 mr-1" />
+                        Submit Idea
+                      </Link>
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleSignOut}>
+                      <LogOut className="w-4 h-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="ghost" size="sm" className="flex-1" asChild>
+                      <Link to="/auth">Log in</Link>
+                    </Button>
+                    <Button variant="hero" size="sm" className="flex-1" asChild>
+                      <Link to="/auth">Get Started</Link>
+                    </Button>
+                  </>
+                )}
               </div>
             </nav>
           </div>

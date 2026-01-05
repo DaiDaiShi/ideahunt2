@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -7,6 +7,8 @@ import MockupPreview from "@/components/submit/MockupPreview";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 
 interface IdeaFormData {
   title: string;
@@ -20,10 +22,23 @@ interface IdeaFormData {
 const SubmitIdea = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, loading } = useAuth();
   const [showPreview, setShowPreview] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [formData, setFormData] = useState<IdeaFormData | null>(null);
+
+  // Redirect to auth if not logged in
+  useEffect(() => {
+    if (!loading && !user) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to submit your idea.",
+        variant: "destructive",
+      });
+      navigate("/auth");
+    }
+  }, [user, loading, navigate, toast]);
 
   const handleGenerateMockup = async (data: IdeaFormData) => {
     setIsGenerating(true);
@@ -56,19 +71,48 @@ const SubmitIdea = () => {
   };
 
   const handlePublish = async () => {
+    if (!formData || !user) return;
+    
     setIsPublishing(true);
 
-    // Simulate publishing
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const features = formData.keyFeatures
+        .split("\n")
+        .map((f) => f.trim())
+        .filter((f) => f.length > 0);
 
-    setIsPublishing(false);
-    toast({
-      title: "Idea Published! 🎉",
-      description: "Your idea is now live and ready for validation.",
-    });
+      const { data, error } = await supabase
+        .from("ideas")
+        .insert({
+          user_id: user.id,
+          title: formData.title,
+          tagline: formData.tagline,
+          problem: formData.problem,
+          solution: formData.solution,
+          target_audience: formData.targetAudience,
+          key_features: features,
+        })
+        .select()
+        .single();
 
-    // Navigate to the idea detail page (using mock ID)
-    navigate("/idea/new-idea");
+      if (error) throw error;
+
+      toast({
+        title: "Idea Published! 🎉",
+        description: "Your idea is now live and ready for validation.",
+      });
+
+      // Navigate to the idea detail page
+      navigate(`/idea/${data.id}`);
+    } catch (error) {
+      toast({
+        title: "Failed to publish",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   const parseFeatures = (featuresText: string): string[] => {
@@ -77,6 +121,18 @@ const SubmitIdea = () => {
       .map((f) => f.trim())
       .filter((f) => f.length > 0);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background">
