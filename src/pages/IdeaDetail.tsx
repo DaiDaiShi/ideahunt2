@@ -139,6 +139,7 @@ const IdeaDetail = () => {
             {/* Sidebar - Right Column */}
             <div className="space-y-6">
               <ValidationFunnel
+                ideaId={idea.id}
                 wantToUse={idea.want_to_use_count}
                 willingToPay={idea.willing_to_pay_count}
                 waitlist={idea.waitlist_count}
