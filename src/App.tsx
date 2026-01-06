@@ -8,8 +8,8 @@ import Index from "./pages/Index";
 import IdeaDetail from "./pages/IdeaDetail";
 import SubmitIdea from "./pages/SubmitIdea";
 import Auth from "./pages/Auth";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
-
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -24,6 +24,7 @@ const App = () => (
             <Route path="/idea/:id" element={<IdeaDetail />} />
             <Route path="/submit" element={<SubmitIdea />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/profile" element={<Profile />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
