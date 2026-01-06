@@ -1,95 +1,63 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import IdeaCard from "./IdeaCard";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 
-const ideas = [
-  {
-    id: "1",
-    title: "AI Recipe Generator for Dietary Restrictions",
-    description: "An app that creates personalized meal plans and recipes based on allergies, preferences, and what's already in your fridge.",
-    author: "Sarah Chen",
-    authorInitial: "S",
-    category: "Health & Food",
-    wantToUse: 847,
-    willingToPay: 234,
-    waitlist: 156,
-    comments: 42,
-    views: 3200,
-    mockupGradient: "bg-gradient-to-br from-green-400/30 to-emerald-500/30",
-  },
-  {
-    id: "2",
-    title: "Remote Team Mood Tracker",
-    description: "A lightweight daily check-in tool that helps remote managers understand team morale and spot burnout before it happens.",
-    author: "Marcus Johnson",
-    authorInitial: "M",
-    category: "Productivity",
-    wantToUse: 623,
-    willingToPay: 189,
-    waitlist: 312,
-    comments: 67,
-    views: 2800,
-    mockupGradient: "bg-gradient-to-br from-blue-400/30 to-indigo-500/30",
-  },
-  {
-    id: "3",
-    title: "Subscription Spending Analyzer",
-    description: "Connect your bank account and get instant insights on recurring charges, with one-click cancellation for unused subscriptions.",
-    author: "Emma Williams",
-    authorInitial: "E",
-    category: "FinTech",
-    wantToUse: 1245,
-    willingToPay: 456,
-    waitlist: 523,
-    comments: 89,
-    views: 5600,
-    mockupGradient: "bg-gradient-to-br from-amber-400/30 to-orange-500/30",
-  },
-  {
-    id: "4",
-    title: "AI-Powered Plant Care Assistant",
-    description: "Snap a photo of your plant to identify it, diagnose issues, and get personalized watering reminders based on your home's conditions.",
-    author: "Alex Rivera",
-    authorInitial: "A",
-    category: "Lifestyle",
-    wantToUse: 534,
-    willingToPay: 98,
-    waitlist: 267,
-    comments: 31,
-    views: 1900,
-    mockupGradient: "bg-gradient-to-br from-teal-400/30 to-cyan-500/30",
-  },
-  {
-    id: "5",
-    title: "Freelancer Invoice Automation",
-    description: "Auto-generate professional invoices from your calendar events and time tracking, with built-in payment reminders.",
-    author: "David Kim",
-    authorInitial: "D",
-    category: "Business",
-    wantToUse: 892,
-    willingToPay: 367,
-    waitlist: 445,
-    comments: 54,
-    views: 4100,
-    mockupGradient: "bg-gradient-to-br from-purple-400/30 to-violet-500/30",
-  },
-  {
-    id: "6",
-    title: "Neighborhood Safety Alerts",
-    description: "Community-driven safety notifications with verified reports, real-time crime mapping, and direct communication with local authorities.",
-    author: "Lisa Park",
-    authorInitial: "L",
-    category: "Community",
-    wantToUse: 756,
-    willingToPay: 123,
-    waitlist: 389,
-    comments: 78,
-    views: 3400,
-    mockupGradient: "bg-gradient-to-br from-rose-400/30 to-pink-500/30",
-  },
+const gradients = [
+  "bg-gradient-to-br from-green-400/30 to-emerald-500/30",
+  "bg-gradient-to-br from-blue-400/30 to-indigo-500/30",
+  "bg-gradient-to-br from-amber-400/30 to-orange-500/30",
+  "bg-gradient-to-br from-teal-400/30 to-cyan-500/30",
+  "bg-gradient-to-br from-purple-400/30 to-violet-500/30",
+  "bg-gradient-to-br from-rose-400/30 to-pink-500/30",
 ];
 
 const FeaturedIdeas = () => {
+  const { data: ideas, isLoading } = useQuery({
+    queryKey: ["featured-ideas"],
+    queryFn: async () => {
+      const { data: ideasData, error: ideasError } = await supabase
+        .from("ideas")
+        .select("*")
+        .eq("status", "published")
+        .order("created_at", { ascending: false })
+        .limit(6);
+
+      if (ideasError) throw ideasError;
+      if (!ideasData || ideasData.length === 0) return [];
+
+      // Fetch profiles for all idea authors
+      const userIds = [...new Set(ideasData.map((idea) => idea.user_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, display_name")
+        .in("user_id", userIds);
+
+      const profileMap = new Map(
+        profiles?.map((p) => [p.user_id, p.display_name]) || []
+      );
+
+      return ideasData.map((idea, index) => {
+        const authorName = profileMap.get(idea.user_id) || "Anonymous";
+        return {
+          id: idea.id,
+          title: idea.title,
+          description: idea.tagline,
+          author: authorName,
+          authorInitial: authorName.charAt(0).toUpperCase(),
+          category: idea.target_audience,
+          wantToUse: idea.want_to_use_count,
+          willingToPay: idea.willing_to_pay_count,
+          waitlist: idea.waitlist_count,
+          comments: idea.comments_count,
+          views: idea.views_count,
+          mockupGradient: gradients[index % gradients.length],
+        };
+      });
+    },
+  });
+
   return (
     <section id="ideas" className="py-20 md:py-32">
       <div className="container mx-auto px-4 md:px-6">
@@ -110,11 +78,21 @@ const FeaturedIdeas = () => {
         </div>
 
         {/* Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {ideas.map((idea, index) => (
-            <IdeaCard key={index} {...idea} />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : ideas && ideas.length > 0 ? (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {ideas.map((idea) => (
+              <IdeaCard key={idea.id} {...idea} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-20 text-muted-foreground">
+            <p className="text-lg">No ideas yet. Be the first to submit one!</p>
+          </div>
+        )}
       </div>
     </section>
   );
