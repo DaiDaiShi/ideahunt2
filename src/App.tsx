@@ -9,6 +9,7 @@ import IdeaDetail from "./pages/IdeaDetail";
 import SubmitIdea from "./pages/SubmitIdea";
 import Auth from "./pages/Auth";
 import Profile from "./pages/Profile";
+import Explore from "./pages/Explore";
 import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/submit" element={<SubmitIdea />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/explore" element={<Explore />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

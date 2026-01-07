@@ -33,13 +33,13 @@ const Header = () => {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-8">
-            <a href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">
+            <a href="/#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">
               How it Works
             </a>
-            <a href="#ideas" className="text-muted-foreground hover:text-foreground transition-colors">
+            <Link to="/explore" className="text-muted-foreground hover:text-foreground transition-colors">
               Explore Ideas
-            </a>
-            <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">
+            </Link>
+            <a href="/#pricing" className="text-muted-foreground hover:text-foreground transition-colors">
               Pricing
             </a>
           </nav>
@@ -105,13 +105,13 @@ const Header = () => {
         {mobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-border/50 animate-fade-in">
             <nav className="flex flex-col gap-4">
-              <a href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">
+              <a href="/#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">
                 How it Works
               </a>
-              <a href="#ideas" className="text-muted-foreground hover:text-foreground transition-colors">
+              <Link to="/explore" className="text-muted-foreground hover:text-foreground transition-colors">
                 Explore Ideas
-              </a>
-              <a href="#pricing" className="text-muted-foreground hover:text-foreground transition-colors">
+              </Link>
+              <a href="/#pricing" className="text-muted-foreground hover:text-foreground transition-colors">
                 Pricing
               </a>
               <div className="flex gap-3 pt-2">
