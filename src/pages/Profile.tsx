@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2, Camera, Save } from "lucide-react";
+import UserIdeasList from "@/components/profile/UserIdeasList";
 
 const Profile = () => {
   const { user, loading: authLoading } = useAuth();
@@ -140,7 +141,7 @@ const Profile = () => {
     <div className="min-h-screen bg-background">
       <Header />
       <main className="pt-24 pb-20">
-        <div className="container mx-auto px-4 md:px-6 max-w-2xl">
+        <div className="container mx-auto px-4 md:px-6 max-w-2xl space-y-8">
           <Card>
             <CardHeader>
               <CardTitle className="font-display text-2xl">Your Profile</CardTitle>
@@ -229,6 +230,9 @@ const Profile = () => {
               </form>
             </CardContent>
           </Card>
+
+          {/* My Ideas Section */}
+          {user && <UserIdeasList userId={user.id} />}
         </div>
       </main>
       <Footer />
