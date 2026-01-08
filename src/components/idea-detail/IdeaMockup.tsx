@@ -1,6 +1,13 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Heart, DollarSign, Bell, Share2, Bookmark } from "lucide-react";
+import { Twitter, Linkedin, Facebook } from "lucide-react";
 
 interface IdeaMockupProps {
   title: string;
@@ -21,6 +28,30 @@ const IdeaMockup = ({
   createdAt,
   mockupGradient,
 }: IdeaMockupProps) => {
+  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+  const shareText = `Check out this idea: ${title} - ${description}`;
+
+  const shareOnTwitter = () => {
+    window.open(
+      `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`,
+      "_blank"
+    );
+  };
+
+  const shareOnLinkedIn = () => {
+    window.open(
+      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
+      "_blank"
+    );
+  };
+
+  const shareOnFacebook = () => {
+    window.open(
+      `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
+      "_blank"
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Full Mockup Preview */}
@@ -62,9 +93,27 @@ const IdeaMockup = ({
             <Button variant="outline" size="icon" className="shrink-0">
               <Bookmark className="w-4 h-4" />
             </Button>
-            <Button variant="outline" size="icon" className="shrink-0">
-              <Share2 className="w-4 h-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="shrink-0">
+                  <Share2 className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={shareOnTwitter} className="cursor-pointer gap-2">
+                  <Twitter className="w-4 h-4" />
+                  Share on Twitter
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={shareOnLinkedIn} className="cursor-pointer gap-2">
+                  <Linkedin className="w-4 h-4" />
+                  Share on LinkedIn
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={shareOnFacebook} className="cursor-pointer gap-2">
+                  <Facebook className="w-4 h-4" />
+                  Share on Facebook
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
