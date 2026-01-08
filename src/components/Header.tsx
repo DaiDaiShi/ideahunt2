@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Lightbulb, Menu, Plus, LogOut, User, BarChart3 } from "lucide-react";
+import { Lightbulb, Menu, Plus, LogOut, User, BarChart3, Trophy } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -38,6 +38,9 @@ const Header = () => {
             </a>
             <Link to="/explore" className="text-muted-foreground hover:text-foreground transition-colors">
               Explore Ideas
+            </Link>
+            <Link to="/leaderboard" className="text-muted-foreground hover:text-foreground transition-colors">
+              Leaderboard
             </Link>
             <a href="/#pricing" className="text-muted-foreground hover:text-foreground transition-colors">
               Pricing
@@ -116,6 +119,9 @@ const Header = () => {
               </a>
               <Link to="/explore" className="text-muted-foreground hover:text-foreground transition-colors">
                 Explore Ideas
+              </Link>
+              <Link to="/leaderboard" className="text-muted-foreground hover:text-foreground transition-colors">
+                Leaderboard
               </Link>
               <a href="/#pricing" className="text-muted-foreground hover:text-foreground transition-colors">
                 Pricing
