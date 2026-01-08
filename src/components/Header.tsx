@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Lightbulb, Menu, Plus, LogOut, User } from "lucide-react";
+import { Lightbulb, Menu, Plus, LogOut, User, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -69,6 +69,12 @@ const Header = () => {
                       <Link to="/profile">
                         <User className="w-4 h-4 mr-2" />
                         Profile
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link to="/dashboard">
+                        <BarChart3 className="w-4 h-4 mr-2" />
+                        Dashboard
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
