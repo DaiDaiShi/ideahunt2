@@ -25,6 +25,7 @@ interface IdeaWithProfile {
   views_count: number;
   user_id: string;
   created_at: string;
+  images: string[] | null;
   profiles: {
     display_name: string | null;
   } | null;
@@ -131,6 +132,7 @@ const IdeaDetail = () => {
                 category="Product Idea"
                 createdAt={createdAt}
                 mockupGradient="bg-gradient-to-br from-primary/30 via-accent/20 to-secondary/30"
+                images={idea.images}
               />
 
               <CommentsSection ideaId={idea.id} ideaOwnerId={idea.user_id} />
