@@ -192,6 +192,7 @@ const Explore = () => {
                     comments={idea.comments_count}
                     views={idea.views_count}
                     mockupGradient="bg-gradient-to-br from-primary/20 to-accent/20"
+                    images={idea.images}
                   />
                 ))}
               </div>
