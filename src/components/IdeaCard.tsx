@@ -17,6 +17,7 @@ interface IdeaCardProps {
   comments: number;
   views: number;
   mockupGradient: string;
+  images?: string[] | null;
 }
 
 const IdeaCard = ({
@@ -32,6 +33,7 @@ const IdeaCard = ({
   comments,
   views,
   mockupGradient,
+  images,
 }: IdeaCardProps) => {
   const navigate = useNavigate();
   const { hasVoted, toggleValidation, isPending, isAuthenticated } =
@@ -52,19 +54,29 @@ const IdeaCard = ({
     toggleValidation(signalType);
   };
 
+  const hasImages = images && images.length > 0;
+
   return (
     <Link to={`/idea/${id}`} className="block group">
       <div className="bg-gradient-card rounded-2xl border border-border/50 overflow-hidden shadow-soft hover:shadow-medium transition-all duration-300 hover:-translate-y-1">
         {/* Mockup Preview */}
-        <div className={`h-48 ${mockupGradient} relative overflow-hidden`}>
-          <div className="absolute inset-4 bg-card/90 backdrop-blur rounded-lg shadow-soft flex items-center justify-center">
-            <div className="w-3/4 space-y-3">
-              <div className="h-3 bg-muted rounded-full w-2/3" />
-              <div className="h-3 bg-muted rounded-full w-full" />
-              <div className="h-3 bg-muted rounded-full w-1/2" />
-              <div className="h-8 bg-primary/20 rounded-lg w-1/3 mt-4" />
+        <div className={`h-48 ${hasImages ? '' : mockupGradient} relative overflow-hidden`}>
+          {hasImages ? (
+            <img
+              src={images[0]}
+              alt={title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="absolute inset-4 bg-card/90 backdrop-blur rounded-lg shadow-soft flex items-center justify-center">
+              <div className="w-3/4 space-y-3">
+                <div className="h-3 bg-muted rounded-full w-2/3" />
+                <div className="h-3 bg-muted rounded-full w-full" />
+                <div className="h-3 bg-muted rounded-full w-1/2" />
+                <div className="h-8 bg-primary/20 rounded-lg w-1/3 mt-4" />
+              </div>
             </div>
-          </div>
+          )}
           <div className="absolute top-3 right-3 px-2.5 py-1 bg-card/90 backdrop-blur rounded-full text-xs font-medium">
             {category}
           </div>

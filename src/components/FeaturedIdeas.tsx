@@ -53,6 +53,7 @@ const FeaturedIdeas = () => {
           comments: idea.comments_count,
           views: idea.views_count,
           mockupGradient: gradients[index % gradients.length],
+          images: idea.images,
         };
       });
     },
