@@ -118,6 +118,7 @@ export type Database = {
           comments_count: number
           created_at: string
           id: string
+          images: string[] | null
           key_features: string[]
           problem: string
           solution: string
@@ -136,6 +137,7 @@ export type Database = {
           comments_count?: number
           created_at?: string
           id?: string
+          images?: string[] | null
           key_features?: string[]
           problem: string
           solution: string
@@ -154,6 +156,7 @@ export type Database = {
           comments_count?: number
           created_at?: string
           id?: string
+          images?: string[] | null
           key_features?: string[]
           problem?: string
           solution?: string

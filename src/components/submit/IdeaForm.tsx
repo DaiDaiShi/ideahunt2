@@ -4,23 +4,26 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { ArrowRight, ArrowLeft, Sparkles, Loader2 } from "lucide-react";
+import ImageUpload from "./ImageUpload";
 
-interface IdeaFormData {
+export interface IdeaFormData {
   title: string;
   tagline: string;
   problem: string;
   solution: string;
   targetAudience: string;
   keyFeatures: string;
+  images: string[];
 }
 
 interface IdeaFormProps {
   onSubmit: (data: IdeaFormData) => void;
   onGenerateMockup: (data: IdeaFormData) => void;
   isGenerating: boolean;
+  userId: string;
 }
 
-const IdeaForm = ({ onSubmit, onGenerateMockup, isGenerating }: IdeaFormProps) => {
+const IdeaForm = ({ onSubmit, onGenerateMockup, isGenerating, userId }: IdeaFormProps) => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<IdeaFormData>({
     title: "",
@@ -29,10 +32,15 @@ const IdeaForm = ({ onSubmit, onGenerateMockup, isGenerating }: IdeaFormProps) =
     solution: "",
     targetAudience: "",
     keyFeatures: "",
+    images: [],
   });
 
   const updateField = (field: keyof IdeaFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateImages = (images: string[]) => {
+    setFormData((prev) => ({ ...prev, images }));
   };
 
   const canProceedStep1 = formData.title.trim() && formData.tagline.trim();
@@ -197,6 +205,15 @@ const IdeaForm = ({ onSubmit, onGenerateMockup, isGenerating }: IdeaFormProps) =
                 value={formData.keyFeatures}
                 onChange={(e) => updateField("keyFeatures", e.target.value)}
                 className="min-h-[120px]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Images (Optional)</Label>
+              <ImageUpload
+                images={formData.images}
+                onImagesChange={updateImages}
+                userId={userId}
               />
             </div>
           </div>

@@ -10,14 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 
-interface IdeaFormData {
-  title: string;
-  tagline: string;
-  problem: string;
-  solution: string;
-  targetAudience: string;
-  keyFeatures: string;
-}
+import type { IdeaFormData } from "@/components/submit/IdeaForm";
 
 const SubmitIdea = () => {
   const navigate = useNavigate();
@@ -91,6 +84,7 @@ const SubmitIdea = () => {
           solution: formData.solution,
           target_audience: formData.targetAudience,
           key_features: features,
+          images: formData.images,
         })
         .select()
         .single();
@@ -170,6 +164,7 @@ const SubmitIdea = () => {
                 title={formData.title}
                 tagline={formData.tagline}
                 features={parseFeatures(formData.keyFeatures)}
+                images={formData.images}
                 onRegenerate={handleRegenerate}
                 onPublish={handlePublish}
                 isRegenerating={isGenerating}
@@ -180,6 +175,7 @@ const SubmitIdea = () => {
                 onSubmit={() => {}}
                 onGenerateMockup={handleGenerateMockup}
                 isGenerating={isGenerating}
+                userId={user.id}
               />
             )}
           </div>
