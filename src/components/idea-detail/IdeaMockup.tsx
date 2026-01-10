@@ -6,8 +6,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Heart, DollarSign, Bell, Share2, Bookmark } from "lucide-react";
+import { Heart, DollarSign, Bell, Share2, Bookmark, ChevronLeft, ChevronRight } from "lucide-react";
 import { Twitter, Linkedin, Facebook } from "lucide-react";
+import { useState } from "react";
 
 interface IdeaMockupProps {
   title: string;
@@ -17,6 +18,7 @@ interface IdeaMockupProps {
   category: string;
   createdAt: string;
   mockupGradient: string;
+  images?: string[] | null;
 }
 
 const IdeaMockup = ({
@@ -27,9 +29,25 @@ const IdeaMockup = ({
   category,
   createdAt,
   mockupGradient,
+  images,
 }: IdeaMockupProps) => {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
   const shareText = `Check out this idea: ${title} - ${description}`;
+  
+  const hasImages = images && images.length > 0;
+  
+  const nextImage = () => {
+    if (hasImages) {
+      setCurrentImageIndex((prev) => (prev + 1) % images.length);
+    }
+  };
+  
+  const prevImage = () => {
+    if (hasImages) {
+      setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+    }
+  };
 
   const shareOnTwitter = () => {
     window.open(
@@ -55,28 +73,72 @@ const IdeaMockup = ({
   return (
     <div className="space-y-6">
       {/* Full Mockup Preview */}
-      <div className={`aspect-video ${mockupGradient} rounded-2xl relative overflow-hidden shadow-medium`}>
-        <div className="absolute inset-6 bg-card/95 backdrop-blur rounded-xl shadow-soft flex items-center justify-center">
-          <div className="w-4/5 space-y-4">
-            <div className="h-4 bg-muted rounded-full w-1/3" />
-            <div className="h-4 bg-muted rounded-full w-2/3" />
-            <div className="h-4 bg-muted rounded-full w-full" />
-            <div className="h-4 bg-muted rounded-full w-3/4" />
-            <div className="grid grid-cols-3 gap-4 mt-6">
-              <div className="h-20 bg-muted/60 rounded-lg" />
-              <div className="h-20 bg-muted/60 rounded-lg" />
-              <div className="h-20 bg-muted/60 rounded-lg" />
-            </div>
-            <div className="flex gap-3 mt-6">
-              <div className="h-10 bg-primary/30 rounded-lg w-32" />
-              <div className="h-10 bg-muted rounded-lg w-24" />
+      {hasImages ? (
+        <div className="aspect-video rounded-2xl relative overflow-hidden shadow-medium bg-muted">
+          <img
+            src={images[currentImageIndex]}
+            alt={`${title} - Image ${currentImageIndex + 1}`}
+            className="w-full h-full object-cover"
+          />
+          {images.length > 1 && (
+            <>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute left-3 top-1/2 -translate-y-1/2 bg-card/90 backdrop-blur hover:bg-card"
+                onClick={prevImage}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute right-3 top-1/2 -translate-y-1/2 bg-card/90 backdrop-blur hover:bg-card"
+                onClick={nextImage}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                {images.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setCurrentImageIndex(idx)}
+                    className={`w-2 h-2 rounded-full transition-colors ${
+                      idx === currentImageIndex ? "bg-primary" : "bg-card/60"
+                    }`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+          <Badge className="absolute top-4 right-4 bg-card/90 backdrop-blur text-foreground">
+            {category}
+          </Badge>
+        </div>
+      ) : (
+        <div className={`aspect-video ${mockupGradient} rounded-2xl relative overflow-hidden shadow-medium`}>
+          <div className="absolute inset-6 bg-card/95 backdrop-blur rounded-xl shadow-soft flex items-center justify-center">
+            <div className="w-4/5 space-y-4">
+              <div className="h-4 bg-muted rounded-full w-1/3" />
+              <div className="h-4 bg-muted rounded-full w-2/3" />
+              <div className="h-4 bg-muted rounded-full w-full" />
+              <div className="h-4 bg-muted rounded-full w-3/4" />
+              <div className="grid grid-cols-3 gap-4 mt-6">
+                <div className="h-20 bg-muted/60 rounded-lg" />
+                <div className="h-20 bg-muted/60 rounded-lg" />
+                <div className="h-20 bg-muted/60 rounded-lg" />
+              </div>
+              <div className="flex gap-3 mt-6">
+                <div className="h-10 bg-primary/30 rounded-lg w-32" />
+                <div className="h-10 bg-muted rounded-lg w-24" />
+              </div>
             </div>
           </div>
+          <Badge className="absolute top-4 right-4 bg-card/90 backdrop-blur text-foreground">
+            {category}
+          </Badge>
         </div>
-        <Badge className="absolute top-4 right-4 bg-card/90 backdrop-blur text-foreground">
-          {category}
-        </Badge>
-      </div>
+      )}
 
       {/* Idea Header */}
       <div className="space-y-4">
