@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getIdeasByUser, deleteIdea } from "@/integrations/firebase/ideaService";
 import { Link, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,27 +30,14 @@ const UserIdeasList = ({ userId }: UserIdeasListProps) => {
   const { data: ideas, isLoading } = useQuery({
     queryKey: ["user-ideas", userId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ideas")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data;
+      return await getIdeasByUser(userId);
     },
     enabled: !!userId,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (ideaId: string) => {
-      const { error } = await supabase
-        .from("ideas")
-        .delete()
-        .eq("id", ideaId)
-        .eq("user_id", userId);
-
-      if (error) throw error;
+      await deleteIdea(ideaId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user-ideas", userId] });

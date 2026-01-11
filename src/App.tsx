@@ -13,6 +13,7 @@ import Explore from "./pages/Explore";
 import EditIdea from "./pages/EditIdea";
 import Dashboard from "./pages/Dashboard";
 import Leaderboard from "./pages/Leaderboard";
+import SetupUsername from "./pages/SetupUsername";
 import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/edit/:id" element={<EditIdea />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/setup-username" element={<SetupUsername />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

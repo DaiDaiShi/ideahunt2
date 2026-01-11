@@ -1,18 +1,19 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getIdeasByUser } from "@/integrations/firebase/ideaService";
+import { getValidationsForUserIdeas } from "@/integrations/firebase/validationService";
 import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Eye, Users, DollarSign, Clock, TrendingUp, MessageCircle, Lightbulb } from "lucide-react";
+import { Loader2, Eye, Users, DollarSign, Clock, TrendingUp, Lightbulb } from "lucide-react";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 import { format, subDays, parseISO } from "date-fns";
 
 const Dashboard = () => {
@@ -30,32 +31,17 @@ const Dashboard = () => {
     queryKey: ["dashboard-ideas", user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await supabase
-        .from("ideas")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data || [];
+      return await getIdeasByUser(user.id);
     },
     enabled: !!user,
   });
 
   // Fetch validations for trend data
-  const { data: validations, isLoading: validationsLoading } = useQuery({
+  const { data: validations } = useQuery({
     queryKey: ["dashboard-validations", user?.id],
     queryFn: async () => {
       if (!user || !ideas?.length) return [];
-      const ideaIds = ideas.map((i) => i.id);
-      const { data, error } = await supabase
-        .from("idea_validations")
-        .select("*")
-        .in("idea_id", ideaIds)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error;
-      return data || [];
+      return await getValidationsForUserIdeas(user.id);
     },
     enabled: !!user && !!ideas?.length,
   });
@@ -73,7 +59,6 @@ const Dashboard = () => {
   const totalWantToUse = ideas?.reduce((sum, idea) => sum + idea.want_to_use_count, 0) || 0;
   const totalWillingToPay = ideas?.reduce((sum, idea) => sum + idea.willing_to_pay_count, 0) || 0;
   const totalWaitlist = ideas?.reduce((sum, idea) => sum + idea.waitlist_count, 0) || 0;
-  const totalComments = ideas?.reduce((sum, idea) => sum + idea.comments_count, 0) || 0;
   const totalValidations = totalWantToUse + totalWillingToPay + totalWaitlist;
 
   // Prepare validation trend data (last 30 days)
@@ -83,9 +68,8 @@ const Dashboard = () => {
   });
 
   const validationTrendData = last30Days.map((date) => {
-    const dayValidations = validations?.filter(
-      (v) => format(parseISO(v.created_at), "yyyy-MM-dd") === date
-    ) || [];
+    const dayValidations =
+      validations?.filter((v) => format(parseISO(v.created_at), "yyyy-MM-dd") === date) || [];
     return {
       date: format(parseISO(date), "MMM d"),
       wantToUse: dayValidations.filter((v) => v.signal_type === "want_to_use").length,
@@ -95,12 +79,13 @@ const Dashboard = () => {
   });
 
   // Prepare ideas performance data
-  const ideasPerformanceData = ideas?.slice(0, 5).map((idea) => ({
-    name: idea.title.length > 20 ? idea.title.substring(0, 20) + "..." : idea.title,
-    validations: idea.want_to_use_count + idea.willing_to_pay_count + idea.waitlist_count,
-    views: idea.views_count,
-    comments: idea.comments_count,
-  })) || [];
+  const ideasPerformanceData =
+    ideas?.slice(0, 5).map((idea) => ({
+      name: idea.title.length > 20 ? idea.title.substring(0, 20) + "..." : idea.title,
+      validations: idea.want_to_use_count + idea.willing_to_pay_count + idea.waitlist_count,
+      views: idea.views_count,
+      comments: idea.comments_count,
+    })) || [];
 
   // Validation breakdown for pie chart
   const validationBreakdown = [
@@ -125,9 +110,7 @@ const Dashboard = () => {
         <div className="container mx-auto px-4 md:px-6 max-w-6xl">
           <div className="mb-8">
             <h1 className="font-display text-3xl font-bold">Analytics Dashboard</h1>
-            <p className="text-muted-foreground mt-1">
-              Track the performance of your ideas
-            </p>
+            <p className="text-muted-foreground mt-1">Track the performance of your ideas</p>
           </div>
 
           {!ideas || ideas.length === 0 ? (
@@ -216,14 +199,6 @@ const Dashboard = () => {
                             <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
                             <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
                           </linearGradient>
-                          <linearGradient id="willingToPayGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0} />
-                          </linearGradient>
-                          <linearGradient id="waitlistGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0} />
-                          </linearGradient>
                         </defs>
                         <XAxis dataKey="date" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
                         <YAxis tick={{ fontSize: 12 }} tickLine={false} axisLine={false} allowDecimals={false} />
@@ -234,22 +209,6 @@ const Dashboard = () => {
                           name="Want to Use"
                           stroke="hsl(var(--chart-1))"
                           fill="url(#wantToUseGradient)"
-                          strokeWidth={2}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="willingToPay"
-                          name="Willing to Pay"
-                          stroke="hsl(var(--chart-2))"
-                          fill="url(#willingToPayGradient)"
-                          strokeWidth={2}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="waitlist"
-                          name="Waitlist"
-                          stroke="hsl(var(--chart-3))"
-                          fill="url(#waitlistGradient)"
                           strokeWidth={2}
                         />
                       </AreaChart>
@@ -315,7 +274,6 @@ const Dashboard = () => {
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="validations" name="Validations" fill="hsl(var(--chart-1))" radius={4} />
                       <Bar dataKey="views" name="Views" fill="hsl(var(--chart-4))" radius={4} />
-                      <Bar dataKey="comments" name="Comments" fill="hsl(var(--chart-5))" radius={4} />
                     </BarChart>
                   </ChartContainer>
                 </CardContent>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getUserProfile, updateUserProfile } from "@/integrations/firebase/userService";
 import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -23,7 +23,6 @@ const Profile = () => {
 
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   // Redirect if not authenticated
@@ -38,14 +37,7 @@ const Profile = () => {
     queryKey: ["profile", user?.id],
     queryFn: async () => {
       if (!user) return null;
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
+      return await getUserProfile(user.id);
     },
     enabled: !!user,
   });
@@ -63,44 +55,18 @@ const Profile = () => {
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
 
-      let avatarUrl = profile?.avatar_url;
-
-      // Upload avatar if a new file was selected
-      if (avatarFile) {
-        const fileExt = avatarFile.name.split(".").pop();
-        const filePath = `${user.id}/avatar.${fileExt}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from("avatars")
-          .upload(filePath, avatarFile, { upsert: true });
-
-        if (uploadError) throw uploadError;
-
-        const { data: urlData } = supabase.storage
-          .from("avatars")
-          .getPublicUrl(filePath);
-
-        avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
-      }
-
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          display_name: displayName,
-          bio,
-          avatar_url: avatarUrl,
-        })
-        .eq("user_id", user.id);
-
-      if (error) throw error;
+      // For now, we skip avatar upload (would need Firebase Storage)
+      await updateUserProfile(user.id, {
+        display_name: displayName,
+        bio,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["profile", user?.id] });
       toast.success("Profile updated successfully!");
-      setAvatarFile(null);
       setAvatarPreview(null);
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast.error(`Failed to update profile: ${error.message}`);
     },
   });
@@ -116,7 +82,8 @@ const Profile = () => {
         toast.error("Image must be less than 5MB");
         return;
       }
-      setAvatarFile(file);
+      // Note: Avatar upload would need Firebase Storage setup
+      toast.info("Avatar upload requires Firebase Storage setup");
       setAvatarPreview(URL.createObjectURL(file));
     }
   };
@@ -135,7 +102,11 @@ const Profile = () => {
   }
 
   const avatarSrc = avatarPreview || profile?.avatar_url;
-  const initials = displayName?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || "?";
+  const initials =
+    displayName?.charAt(0)?.toUpperCase() ||
+    user?.user_name?.charAt(0)?.toUpperCase() ||
+    user?.email?.charAt(0)?.toUpperCase() ||
+    "?";
 
   return (
     <div className="min-h-screen bg-background">
@@ -187,6 +158,20 @@ const Profile = () => {
                   />
                 </div>
 
+                {/* Username (read-only) */}
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    value={user?.user_name || ""}
+                    disabled
+                    className="bg-muted"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Username cannot be changed
+                  </p>
+                </div>
+
                 {/* Email (read-only) */}
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
@@ -196,9 +181,6 @@ const Profile = () => {
                     disabled
                     className="bg-muted"
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Email cannot be changed
-                  </p>
                 </div>
 
                 {/* Bio */}

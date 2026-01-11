@@ -8,7 +8,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { createIdea } from "@/integrations/firebase/ideaService";
 
 import type { IdeaFormData } from "@/components/submit/IdeaForm";
 
@@ -65,7 +65,7 @@ const SubmitIdea = () => {
 
   const handlePublish = async () => {
     if (!formData || !user) return;
-    
+
     setIsPublishing(true);
 
     try {
@@ -74,34 +74,29 @@ const SubmitIdea = () => {
         .map((f) => f.trim())
         .filter((f) => f.length > 0);
 
-      const { data, error } = await supabase
-        .from("ideas")
-        .insert({
-          user_id: user.id,
-          title: formData.title,
-          tagline: formData.tagline,
-          problem: formData.problem,
-          solution: formData.solution,
-          target_audience: formData.targetAudience,
-          key_features: features,
-          images: formData.images,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const idea = await createIdea({
+        user_id: user.id,
+        title: formData.title,
+        tagline: formData.tagline,
+        problem: formData.problem,
+        solution: formData.solution,
+        target_audience: formData.targetAudience,
+        key_features: features,
+        images: formData.images,
+      });
 
       toast({
-        title: "Idea Published! 🎉",
+        title: "Idea Published!",
         description: "Your idea is now live and ready for validation.",
       });
 
       // Navigate to the idea detail page
-      navigate(`/idea/${data.id}`);
-    } catch (error) {
+      navigate(`/idea/${idea.id}`);
+    } catch (error: any) {
+      console.error("Publish error:", error);
       toast({
         title: "Failed to publish",
-        description: "Something went wrong. Please try again.",
+        description: error.message || "Something went wrong. Please try again.",
         variant: "destructive",
       });
     } finally {

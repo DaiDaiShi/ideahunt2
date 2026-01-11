@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getIdeas } from "@/integrations/firebase/ideaService";
+import { getUserProfile } from "@/integrations/firebase/userService";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,17 +15,10 @@ const Leaderboard = () => {
   const { data: topIdeas, isLoading: ideasLoading } = useQuery({
     queryKey: ["leaderboard-ideas"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("ideas")
-        .select("*")
-        .eq("status", "published")
-        .order("want_to_use_count", { ascending: false })
-        .limit(20);
+      const ideas = await getIdeas();
 
-      if (error) throw error;
-
-      // Sort by total validations
-      return (data || [])
+      // Sort by total validations and get top 10
+      return ideas
         .map((idea) => ({
           ...idea,
           totalValidations: idea.want_to_use_count + idea.willing_to_pay_count + idea.waitlist_count,
@@ -38,23 +32,20 @@ const Leaderboard = () => {
   const { data: topCreators, isLoading: creatorsLoading } = useQuery({
     queryKey: ["leaderboard-creators"],
     queryFn: async () => {
-      // First get all published ideas with their user_ids
-      const { data: ideas, error: ideasError } = await supabase
-        .from("ideas")
-        .select("user_id, want_to_use_count, willing_to_pay_count, waitlist_count, views_count")
-        .eq("status", "published");
-
-      if (ideasError) throw ideasError;
+      const ideas = await getIdeas();
 
       // Aggregate by user
-      const userStats: Record<string, { 
-        userId: string; 
-        totalValidations: number; 
-        totalViews: number;
-        ideaCount: number;
-      }> = {};
+      const userStats: Record<
+        string,
+        {
+          userId: string;
+          totalValidations: number;
+          totalViews: number;
+          ideaCount: number;
+        }
+      > = {};
 
-      (ideas || []).forEach((idea) => {
+      ideas.forEach((idea) => {
         if (!userStats[idea.user_id]) {
           userStats[idea.user_id] = {
             userId: idea.user_id,
@@ -63,7 +54,7 @@ const Leaderboard = () => {
             ideaCount: 0,
           };
         }
-        userStats[idea.user_id].totalValidations += 
+        userStats[idea.user_id].totalValidations +=
           idea.want_to_use_count + idea.willing_to_pay_count + idea.waitlist_count;
         userStats[idea.user_id].totalViews += idea.views_count;
         userStats[idea.user_id].ideaCount += 1;
@@ -77,19 +68,16 @@ const Leaderboard = () => {
       if (topUserIds.length === 0) return [];
 
       // Fetch profiles for these users
-      const { data: profiles, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*")
-        .in("user_id", topUserIds.map((u) => u.userId));
-
-      if (profilesError) throw profilesError;
+      const profiles = await Promise.all(
+        topUserIds.map((u) => getUserProfile(u.userId))
+      );
 
       // Combine data
       return topUserIds.map((stats) => {
-        const profile = profiles?.find((p) => p.user_id === stats.userId);
+        const profile = profiles.find((p) => p?.id === stats.userId);
         return {
           ...stats,
-          displayName: profile?.display_name || "Anonymous",
+          displayName: profile?.display_name || profile?.user_name || "Anonymous",
           avatarUrl: profile?.avatar_url,
         };
       });
@@ -100,7 +88,11 @@ const Leaderboard = () => {
     if (rank === 1) return <Crown className="w-5 h-5 text-yellow-500" />;
     if (rank === 2) return <Medal className="w-5 h-5 text-gray-400" />;
     if (rank === 3) return <Medal className="w-5 h-5 text-amber-600" />;
-    return <span className="w-5 h-5 flex items-center justify-center text-sm font-bold text-muted-foreground">{rank}</span>;
+    return (
+      <span className="w-5 h-5 flex items-center justify-center text-sm font-bold text-muted-foreground">
+        {rank}
+      </span>
+    );
   };
 
   const isLoading = ideasLoading || creatorsLoading;
@@ -164,9 +156,7 @@ const Leaderboard = () => {
                               <h3 className="font-semibold truncate group-hover:text-primary transition-colors">
                                 {idea.title}
                               </h3>
-                              <p className="text-sm text-muted-foreground truncate">
-                                {idea.tagline}
-                              </p>
+                              <p className="text-sm text-muted-foreground truncate">{idea.tagline}</p>
                             </div>
                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
                               <div className="flex items-center gap-1" title="Want to Use">
@@ -221,9 +211,7 @@ const Leaderboard = () => {
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold truncate">
-                                {creator.displayName}
-                              </h3>
+                              <h3 className="font-semibold truncate">{creator.displayName}</h3>
                               <p className="text-sm text-muted-foreground">
                                 {creator.ideaCount} {creator.ideaCount === 1 ? "idea" : "ideas"} published
                               </p>

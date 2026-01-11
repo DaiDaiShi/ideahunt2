@@ -65,7 +65,7 @@ const Header = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem className="text-muted-foreground text-sm">
-                      {user.email}
+                      {user.user_name || user.email}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem asChild>

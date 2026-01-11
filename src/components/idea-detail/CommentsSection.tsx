@@ -4,19 +4,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { ThumbsUp, MessageCircle, Loader2, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { Link } from "react-router-dom";
+import {
+  getCommentsByIdea,
+  createComment,
+  deleteComment,
+  toggleCommentLike,
+  getUserLikedCommentIds,
+  Comment,
+} from "@/integrations/firebase/commentService";
+import { getUserProfile } from "@/integrations/firebase/userService";
 
-interface CommentWithProfile {
-  id: string;
-  content: string;
-  likes_count: number;
-  created_at: string;
-  user_id: string;
+interface CommentWithProfile extends Comment {
   profiles: {
     display_name: string | null;
+    user_name: string | null;
   } | null;
 }
 
@@ -35,48 +39,57 @@ const CommentsSection = ({ ideaId, ideaOwnerId }: CommentsSectionProps) => {
   const [likedComments, setLikedComments] = useState<Set<string>>(new Set());
 
   const fetchComments = async () => {
-    // First fetch comments
-    const { data: commentsData, error: commentsError } = await supabase
-      .from("comments")
-      .select("id, content, likes_count, created_at, user_id")
-      .eq("idea_id", ideaId)
-      .order("created_at", { ascending: false });
+    console.log("fetchComments called for ideaId:", ideaId);
+    try {
+      const commentsData = await getCommentsByIdea(ideaId);
+      console.log("Raw comments data:", commentsData);
 
-    if (commentsError || !commentsData) {
+      if (commentsData.length === 0) {
+        console.log("No comments found for this idea");
+        setComments([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch profiles for all comment authors
+      const userIds = [...new Set(commentsData.map((c) => c.user_id))];
+      console.log("Fetching profiles for userIds:", userIds);
+      const profiles = await Promise.all(
+        userIds.map((userId) => getUserProfile(userId))
+      );
+      console.log("Profiles fetched:", profiles);
+
+      const profilesMap = new Map(
+        profiles.filter((p) => p !== null).map((p) => [p!.id, p])
+      );
+
+      const commentsWithProfiles: CommentWithProfile[] = commentsData.map((c) => {
+        const profile = profilesMap.get(c.user_id);
+        return {
+          ...c,
+          profiles: profile
+            ? { display_name: profile.display_name, user_name: profile.user_name }
+            : null,
+        };
+      });
+
+      console.log("Final comments with profiles:", commentsWithProfiles);
+      setComments(commentsWithProfiles);
+    } catch (error) {
+      console.error("Error fetching comments:", error);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Then fetch profiles for all comment authors
-    const userIds = [...new Set(commentsData.map((c) => c.user_id))];
-    const { data: profilesData } = await supabase
-      .from("profiles")
-      .select("user_id, display_name")
-      .in("user_id", userIds);
-
-    const profilesMap = new Map(
-      profilesData?.map((p) => [p.user_id, p]) || []
-    );
-
-    const commentsWithProfiles: CommentWithProfile[] = commentsData.map((c) => ({
-      ...c,
-      profiles: profilesMap.get(c.user_id) || null,
-    }));
-
-    setComments(commentsWithProfiles);
-    setLoading(false);
   };
 
   const fetchUserLikes = async () => {
     if (!user) return;
-    
-    const { data } = await supabase
-      .from("comment_likes")
-      .select("comment_id")
-      .eq("user_id", user.id);
-    
-    if (data) {
-      setLikedComments(new Set(data.map((l) => l.comment_id)));
+
+    try {
+      const likedIds = await getUserLikedCommentIds(ideaId, user.id);
+      setLikedComments(new Set(likedIds));
+    } catch (error) {
+      console.error("Error fetching user likes:", error);
     }
   };
 
@@ -89,29 +102,24 @@ const CommentsSection = ({ ideaId, ideaOwnerId }: CommentsSectionProps) => {
     if (!user || !commentText.trim()) return;
 
     setSubmitting(true);
-    
-    const { error } = await supabase.from("comments").insert({
-      idea_id: ideaId,
-      user_id: user.id,
-      content: commentText.trim(),
-    });
 
-    if (error) {
-      toast({
-        title: "Failed to post comment",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
+    try {
+      await createComment(ideaId, user.id, commentText.trim());
       setCommentText("");
       fetchComments();
       toast({
         title: "Comment posted!",
         description: "Your feedback has been shared.",
       });
+    } catch (error: any) {
+      toast({
+        title: "Failed to post comment",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
   };
 
   const handleLike = async (commentId: string) => {
@@ -124,56 +132,45 @@ const CommentsSection = ({ ideaId, ideaOwnerId }: CommentsSectionProps) => {
       return;
     }
 
-    const isLiked = likedComments.has(commentId);
+    try {
+      const nowLiked = await toggleCommentLike(commentId, user.id);
 
-    if (isLiked) {
-      await supabase
-        .from("comment_likes")
-        .delete()
-        .eq("comment_id", commentId)
-        .eq("user_id", user.id);
-      
-      setLikedComments((prev) => {
-        const next = new Set(prev);
-        next.delete(commentId);
-        return next;
-      });
-      setComments((prev) =>
-        prev.map((c) =>
-          c.id === commentId ? { ...c, likes_count: c.likes_count - 1 } : c
-        )
-      );
-    } else {
-      await supabase.from("comment_likes").insert({
-        comment_id: commentId,
-        user_id: user.id,
-      });
-      
-      setLikedComments((prev) => new Set(prev).add(commentId));
-      setComments((prev) =>
-        prev.map((c) =>
-          c.id === commentId ? { ...c, likes_count: c.likes_count + 1 } : c
-        )
-      );
+      if (nowLiked) {
+        setLikedComments((prev) => new Set(prev).add(commentId));
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === commentId ? { ...c, likes_count: c.likes_count + 1 } : c
+          )
+        );
+      } else {
+        setLikedComments((prev) => {
+          const next = new Set(prev);
+          next.delete(commentId);
+          return next;
+        });
+        setComments((prev) =>
+          prev.map((c) =>
+            c.id === commentId ? { ...c, likes_count: c.likes_count - 1 } : c
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error toggling like:", error);
     }
   };
 
   const handleDelete = async (commentId: string) => {
-    const { error } = await supabase
-      .from("comments")
-      .delete()
-      .eq("id", commentId);
-
-    if (error) {
+    try {
+      await deleteComment(commentId, ideaId);
+      fetchComments();
+      toast({
+        title: "Comment deleted",
+      });
+    } catch (error: any) {
       toast({
         title: "Failed to delete",
         description: error.message,
         variant: "destructive",
-      });
-    } else {
-      fetchComments();
-      toast({
-        title: "Comment deleted",
       });
     }
   };
@@ -246,7 +243,10 @@ const CommentsSection = ({ ideaId, ideaOwnerId }: CommentsSectionProps) => {
             comments.map((comment) => {
               const isCreator = comment.user_id === ideaOwnerId;
               const isOwn = comment.user_id === user?.id;
-              const displayName = comment.profiles?.display_name || "Anonymous";
+              const displayName =
+                comment.profiles?.display_name ||
+                comment.profiles?.user_name ||
+                "Anonymous";
 
               return (
                 <div key={comment.id} className="group">

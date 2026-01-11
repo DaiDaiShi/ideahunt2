@@ -8,26 +8,13 @@ import ValidationFunnel from "@/components/idea-detail/ValidationFunnel";
 import CommentsSection from "@/components/idea-detail/CommentsSection";
 import AIValidationReport from "@/components/idea-detail/AIValidationReport";
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { getIdeaById, Idea } from "@/integrations/firebase/ideaService";
+import { getUserProfile } from "@/integrations/firebase/userService";
 
-interface IdeaWithProfile {
-  id: string;
-  title: string;
-  tagline: string;
-  problem: string;
-  solution: string;
-  target_audience: string;
-  key_features: string[];
-  want_to_use_count: number;
-  willing_to_pay_count: number;
-  waitlist_count: number;
-  comments_count: number;
-  views_count: number;
-  user_id: string;
-  created_at: string;
-  images: string[] | null;
+interface IdeaWithProfile extends Idea {
   profiles: {
     display_name: string | null;
+    user_name: string | null;
   } | null;
 }
 
@@ -41,31 +28,33 @@ const IdeaDetail = () => {
     const fetchIdea = async () => {
       if (!id) return;
 
-      // Fetch the idea
-      const { data: ideaData, error: ideaError } = await supabase
-        .from("ideas")
-        .select("*")
-        .eq("id", id)
-        .single();
+      try {
+        const ideaData = await getIdeaById(id);
 
-      if (ideaError || !ideaData) {
+        if (!ideaData) {
+          setError(true);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch the profile separately
+        const profileData = await getUserProfile(ideaData.user_id);
+
+        setIdea({
+          ...ideaData,
+          profiles: profileData
+            ? {
+                display_name: profileData.display_name,
+                user_name: profileData.user_name,
+              }
+            : null,
+        });
+        setLoading(false);
+      } catch (err) {
+        console.error("Error fetching idea:", err);
         setError(true);
         setLoading(false);
-        return;
       }
-
-      // Fetch the profile separately
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("display_name")
-        .eq("user_id", ideaData.user_id)
-        .single();
-
-      setIdea({
-        ...ideaData,
-        profiles: profileData || null,
-      } as IdeaWithProfile);
-      setLoading(false);
     };
 
     fetchIdea();
@@ -99,7 +88,8 @@ const IdeaDetail = () => {
     );
   }
 
-  const authorName = idea.profiles?.display_name || "Anonymous";
+  const authorName =
+    idea.profiles?.display_name || idea.profiles?.user_name || "Anonymous";
   const authorInitial = authorName.charAt(0).toUpperCase();
   const createdAt = new Date(idea.created_at).toLocaleDateString("en-US", {
     month: "short",

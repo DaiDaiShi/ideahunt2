@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getIdeas } from "@/integrations/firebase/ideaService";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import IdeaCard from "@/components/IdeaCard";
@@ -16,36 +16,42 @@ const Explore = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   const { data: ideas, isLoading } = useQuery({
-    queryKey: ["all-ideas", sortBy],
+    queryKey: ["all-ideas"],
     queryFn: async () => {
-      let query = supabase
-        .from("ideas")
-        .select("*")
-        .eq("status", "published");
-
-      switch (sortBy) {
-        case "popular":
-          // Sort by total validation signals
-          query = query.order("want_to_use_count", { ascending: false })
-            .order("willing_to_pay_count", { ascending: false })
-            .order("waitlist_count", { ascending: false });
-          break;
-        case "recent":
-          query = query.order("created_at", { ascending: false });
-          break;
-        case "views":
-          query = query.order("views_count", { ascending: false });
-          break;
-        case "comments":
-          query = query.order("comments_count", { ascending: false });
-          break;
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
+      return await getIdeas();
     },
   });
+
+  // Sort ideas based on selected option
+  const sortedIdeas = useMemo(() => {
+    if (!ideas) return [];
+
+    const sorted = [...ideas];
+    switch (sortBy) {
+      case "popular":
+        sorted.sort(
+          (a, b) =>
+            b.want_to_use_count +
+            b.willing_to_pay_count +
+            b.waitlist_count -
+            (a.want_to_use_count + a.willing_to_pay_count + a.waitlist_count)
+        );
+        break;
+      case "recent":
+        sorted.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        break;
+      case "views":
+        sorted.sort((a, b) => b.views_count - a.views_count);
+        break;
+      case "comments":
+        sorted.sort((a, b) => b.comments_count - a.comments_count);
+        break;
+    }
+    return sorted;
+  }, [ideas, sortBy]);
 
   const sortOptions = [
     { value: "popular", label: "Most Popular", icon: TrendingUp },
@@ -56,17 +62,17 @@ const Explore = () => {
 
   // Filter ideas based on search query
   const filteredIdeas = useMemo(() => {
-    if (!ideas) return [];
-    if (!searchQuery.trim()) return ideas;
-    
+    if (!sortedIdeas) return [];
+    if (!searchQuery.trim()) return sortedIdeas;
+
     const query = searchQuery.toLowerCase();
-    return ideas.filter(
+    return sortedIdeas.filter(
       (idea) =>
         idea.title.toLowerCase().includes(query) ||
         idea.tagline.toLowerCase().includes(query) ||
         idea.problem.toLowerCase().includes(query)
     );
-  }, [ideas, searchQuery]);
+  }, [sortedIdeas, searchQuery]);
 
   return (
     <div className="min-h-screen bg-background">

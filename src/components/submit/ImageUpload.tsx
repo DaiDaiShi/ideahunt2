@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ImagePlus, X, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { storage } from "@/integrations/firebase/config";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useToast } from "@/hooks/use-toast";
 
 interface ImageUploadProps {
@@ -11,11 +12,11 @@ interface ImageUploadProps {
   maxImages?: number;
 }
 
-const ImageUpload = ({ 
-  images, 
-  onImagesChange, 
-  userId, 
-  maxImages = 4 
+const ImageUpload = ({
+  images,
+  onImagesChange,
+  userId,
+  maxImages = 4
 }: ImageUploadProps) => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,13 +64,15 @@ const ImageUpload = ({
         }
 
         const fileExt = file.name.split(".").pop();
-        const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const fileName = `idea-images/${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-        const { error: uploadError } = await supabase.storage
-          .from("idea-images")
-          .upload(fileName, file);
+        const storageRef = ref(storage, fileName);
 
-        if (uploadError) {
+        try {
+          await uploadBytes(storageRef, file);
+          const publicUrl = await getDownloadURL(storageRef);
+          uploadedUrls.push(publicUrl);
+        } catch (uploadError: any) {
           console.error("Upload error:", uploadError);
           toast({
             title: "Upload failed",
@@ -78,12 +81,6 @@ const ImageUpload = ({
           });
           continue;
         }
-
-        const { data: { publicUrl } } = supabase.storage
-          .from("idea-images")
-          .getPublicUrl(fileName);
-
-        uploadedUrls.push(publicUrl);
       }
 
       if (uploadedUrls.length > 0) {

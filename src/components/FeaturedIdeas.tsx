@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { getIdeas } from "@/integrations/firebase/ideaService";
+import { getUserProfile } from "@/integrations/firebase/userService";
 import IdeaCard from "./IdeaCard";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Loader2 } from "lucide-react";
@@ -17,25 +18,20 @@ const FeaturedIdeas = () => {
   const { data: ideas, isLoading } = useQuery({
     queryKey: ["featured-ideas"],
     queryFn: async () => {
-      const { data: ideasData, error: ideasError } = await supabase
-        .from("ideas")
-        .select("*")
-        .eq("status", "published")
-        .order("created_at", { ascending: false })
-        .limit(6);
+      const ideasData = await getIdeas(6);
 
-      if (ideasError) throw ideasError;
       if (!ideasData || ideasData.length === 0) return [];
 
       // Fetch profiles for all idea authors
       const userIds = [...new Set(ideasData.map((idea) => idea.user_id))];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, display_name")
-        .in("user_id", userIds);
+      const profiles = await Promise.all(
+        userIds.map((userId) => getUserProfile(userId))
+      );
 
       const profileMap = new Map(
-        profiles?.map((p) => [p.user_id, p.display_name]) || []
+        profiles
+          .filter((p) => p !== null)
+          .map((p) => [p!.id, p!.display_name || p!.user_name])
       );
 
       return ideasData.map((idea, index) => {

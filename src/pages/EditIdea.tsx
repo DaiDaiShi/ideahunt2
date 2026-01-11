@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { getIdeaById, updateIdea } from "@/integrations/firebase/ideaService";
 import { toast } from "sonner";
 
 const EditIdea = () => {
@@ -30,14 +30,7 @@ const EditIdea = () => {
     queryKey: ["idea", id],
     queryFn: async () => {
       if (!id) return null;
-      const { data, error } = await supabase
-        .from("ideas")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
+      return await getIdeaById(id);
     },
     enabled: !!id && !!user,
   });
@@ -74,20 +67,14 @@ const EditIdea = () => {
         .map((f) => f.trim())
         .filter((f) => f.length > 0);
 
-      const { error } = await supabase
-        .from("ideas")
-        .update({
-          title,
-          tagline,
-          problem,
-          solution,
-          target_audience: targetAudience,
-          key_features: features,
-        })
-        .eq("id", id)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
+      await updateIdea(id, {
+        title,
+        tagline,
+        problem,
+        solution,
+        target_audience: targetAudience,
+        key_features: features,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["idea", id] });
@@ -95,7 +82,7 @@ const EditIdea = () => {
       toast.success("Idea updated successfully!");
       navigate(`/idea/${id}`);
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast.error(`Failed to update idea: ${error.message}`);
     },
   });
