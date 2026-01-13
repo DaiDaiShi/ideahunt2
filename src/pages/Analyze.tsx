@@ -13,15 +13,23 @@ import { toast } from "sonner";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
 interface AnalysisResult {
-  summary: string;
-  relevantReviews: Array<{
-    text: string;
-    rating: number;
-    reviewer: string;
-    date: string;
-    relevanceReason: string;
-    sentiment: "positive" | "negative" | "neutral";
+  locations: Array<{
+    url: string;
     placeName: string;
+    matchScore: number;
+    summary: string;
+    chips: Array<{
+      label: string;
+      type: "positive" | "negative";
+      reviewIndices: number[];
+    }>;
+    reviews: Array<{
+      text: string;
+      rating: number;
+      reviewer: string;
+      date: string;
+      relevanceReason?: string;
+    }>;
   }>;
 }
 
@@ -104,7 +112,8 @@ const Analyze = () => {
       }
 
       // Step 2: Analyze reviews
-      setLoadingMessage("AI is analyzing reviews...");
+      const totalReviews = reviewsData.reviews.reduce((sum: number, p: any) => sum + p.reviews.length, 0);
+      setLoadingMessage(`AI is analyzing ${totalReviews} reviews across ${reviewsData.reviews.length} locations...`);
       const analyzeReviews = httpsCallable(functions, "analyzeReviews");
 
       const analysisResult = await analyzeReviews({
@@ -114,6 +123,12 @@ const Analyze = () => {
       });
 
       const analysis = analysisResult.data as AnalysisResult;
+
+      if (!analysis.locations || analysis.locations.length === 0) {
+        toast.error("Could not analyze reviews. Please try again.");
+        setIsAnalyzing(false);
+        return;
+      }
 
       // Navigate to results with data
       navigate("/results", { state: { analysis, criteria, redFlags } });

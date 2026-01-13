@@ -119,21 +119,6 @@ export const fetchReviews = functions
         }
 
         if (dataset && dataset.length > 0) {
-          // Log for debugging
-          console.log(`Dataset has ${dataset.length} items`);
-          console.log("First item keys:", Object.keys(dataset[0]));
-
-          // Log full first item to see structure
-          console.log("Full first item:", JSON.stringify(dataset[0], null, 2).substring(0, 3000));
-
-          // If there are more items, log one
-          if (dataset.length > 1) {
-            console.log("Second item keys:", Object.keys(dataset[1]));
-            console.log("Second item sample:", JSON.stringify(dataset[1], null, 2).substring(0, 1000));
-          }
-
-          // The Apify actor returns reviews as separate items in the dataset
-          // Find the place info (has 'title' or 'placeId') and reviews (have 'text' or 'reviewText')
           let placeName = "Unknown Place";
           const reviews: Review[] = [];
 
@@ -141,14 +126,13 @@ export const fetchReviews = functions
             // Check if this is place info (has title but no review text)
             if (item.title && !item.text && !item.reviewText) {
               placeName = item.title;
-              console.log("Found place:", placeName);
             }
 
-            // Check if this is a review (has text content)
+            // Check if this is a review WITH text content (skip rating-only reviews)
             const reviewText = item.text || item.reviewText || item.textTranslated || "";
-            if (reviewText) {
+            if (reviewText && reviewText.trim().length > 0) {
               reviews.push({
-                text: reviewText,
+                text: reviewText.trim(),
                 rating: item.stars || item.rating || item.reviewRating || 0,
                 reviewer: item.name || item.author || item.reviewerName || item.userName || "Anonymous",
                 date: item.publishedAtDate || item.time || item.reviewDate || item.date || "Unknown",
@@ -156,7 +140,7 @@ export const fetchReviews = functions
             }
           }
 
-          console.log(`Found place: ${placeName}, reviews: ${reviews.length}`);
+          console.log(`Found place: ${placeName}, reviews with text: ${reviews.length}`);
 
           allPlaceReviews.push({
             url,
@@ -168,8 +152,6 @@ export const fetchReviews = functions
         }
       }
 
-      // Log the fetched data for debugging
-      console.log("Fetched reviews:", JSON.stringify(allPlaceReviews, null, 2));
       console.log(`Total places: ${allPlaceReviews.length}, Total reviews: ${allPlaceReviews.reduce((sum, p) => sum + p.reviews.length, 0)}`);
 
       return { reviews: allPlaceReviews };
@@ -182,9 +164,26 @@ export const fetchReviews = functions
     }
   });
 
-// Analyze reviews using OpenAI
+// Chip represents a feature or red flag tag
+interface Chip {
+  label: string;
+  type: "positive" | "negative";
+  reviewIndices: number[]; // indices of reviews that match this chip
+}
+
+// Analysis result for a single location
+interface LocationAnalysis {
+  url: string;
+  placeName: string;
+  matchScore: number; // 0-100 score for ranking
+  summary: string;
+  chips: Chip[];
+  reviews: Array<Review & { relevanceReason?: string }>;
+}
+
+// Analyze reviews using OpenAI - now returns per-location analysis
 export const analyzeReviews = functions
-  .runWith({ timeoutSeconds: 120, memory: "256MB" })
+  .runWith({ timeoutSeconds: 180, memory: "512MB" })
   .https.onCall(
     async (
       data: { reviews: PlaceReviews[]; criteria: string; redFlags?: string },
@@ -216,79 +215,112 @@ export const analyzeReviews = functions
 
       try {
         const openai = new OpenAI({ apiKey: getOpenAIKey() });
+        const locationAnalyses: LocationAnalysis[] = [];
 
-        // Flatten all reviews with place info
-        const allReviews = reviews.flatMap((place) =>
-          place.reviews.map((r) => ({
-            ...r,
-            placeName: place.placeName,
-          }))
-        );
+        // Analyze each location separately
+        for (const place of reviews) {
+          if (place.reviews.length === 0) {
+            // No reviews with text, add with low score
+            locationAnalyses.push({
+              url: place.url,
+              placeName: place.placeName,
+              matchScore: 0,
+              summary: "No reviews with text available for this location.",
+              chips: [],
+              reviews: [],
+            });
+            continue;
+          }
 
-        // Build the prompt
-        const reviewsText = allReviews
-          .map(
-            (r, i) =>
-              `[Review ${i + 1}] Place: ${r.placeName} | Rating: ${r.rating}/5 | By: ${r.reviewer} | Date: ${r.date}\n"${r.text}"`
-          )
-          .join("\n\n");
+          // Build the prompt for this location
+          const reviewsText = place.reviews
+            .map(
+              (r, i) =>
+                `[Review ${i + 1}] Rating: ${r.rating}/5 | By: ${r.reviewer} | Date: ${r.date}\n"${r.text}"`
+            )
+            .join("\n\n");
 
-        const systemPrompt = `You are a helpful assistant that analyzes customer reviews. Your job is to:
-1. Find reviews that are most relevant to what the user cares about
-2. Identify any red flags the user wants to avoid
-3. Provide a concise summary
+          const systemPrompt = `You are an assistant that analyzes customer reviews for a specific location. Analyze how well this place matches the user's preferences and identify any red flags.
 
-Be objective and cite specific reviews when making claims.`;
+Be concise and specific. Extract short 1-3 word tags that summarize key themes from the reviews.`;
 
-        const userPrompt = `I'm researching these places and care about: ${criteria}
-${redFlags ? `\nI want to avoid: ${redFlags}` : ""}
+          const userPrompt = `Location: ${place.placeName}
 
-Here are the reviews:
+User's preferences (what they care about): ${criteria}
+${redFlags ? `Red flags to avoid: ${redFlags}` : ""}
+
+Reviews:
 ${reviewsText}
 
-Please:
-1. Provide a 2-3 paragraph summary addressing my specific concerns
-2. List the most relevant reviews (max 10) that mention what I care about or red flags I should know about
-3. For each relevant review, explain why it's relevant to my criteria
-
-Format your response as JSON:
+Analyze these reviews and respond with JSON:
 {
-  "summary": "Your summary here...",
+  "matchScore": <0-100 number indicating how well this place matches the user's preferences, considering both positive matches and red flags>,
+  "summary": "<2-3 sentences summarizing how this location matches the user's needs, mentioning specific pros and cons>",
+  "chips": [
+    {
+      "label": "<1-3 word tag like 'great food', 'noisy', 'friendly staff', 'slow service'>",
+      "type": "<'positive' if matches user preferences, 'negative' if matches red flags or is a concern>",
+      "reviewIndices": [<array of 0-based review indices that support this tag>]
+    }
+  ],
   "relevantReviews": [
     {
-      "text": "The review text",
-      "rating": 5,
-      "reviewer": "Name",
-      "date": "Date",
-      "placeName": "Place name",
-      "relevanceReason": "Why this review is relevant",
-      "sentiment": "positive" | "negative" | "neutral"
+      "index": <0-based index of the review>,
+      "relevanceReason": "<brief reason why this review is relevant>"
     }
   ]
-}`;
+}
 
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0.3,
-        });
+Generate 3-8 chips that capture the main themes. Only include reviews that are actually relevant.`;
 
-        const content = completion.choices[0]?.message?.content;
-        if (!content) {
-          throw new Error("No response from OpenAI");
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.3,
+          });
+
+          const content = completion.choices[0]?.message?.content;
+          if (!content) {
+            throw new Error("No response from OpenAI");
+          }
+
+          const result = JSON.parse(content);
+
+          // Map relevant reviews with their reasons
+          const relevantReviewsMap = new Map<number, string>();
+          if (result.relevantReviews) {
+            for (const rr of result.relevantReviews) {
+              relevantReviewsMap.set(rr.index, rr.relevanceReason);
+            }
+          }
+
+          // Build the reviews array with relevance reasons
+          const reviewsWithReasons = place.reviews.map((r, i) => ({
+            ...r,
+            relevanceReason: relevantReviewsMap.get(i),
+          }));
+
+          locationAnalyses.push({
+            url: place.url,
+            placeName: place.placeName,
+            matchScore: result.matchScore || 0,
+            summary: result.summary || "",
+            chips: result.chips || [],
+            reviews: reviewsWithReasons,
+          });
         }
 
-        const result = JSON.parse(content);
+        // Sort by matchScore descending (best matches first)
+        locationAnalyses.sort((a, b) => b.matchScore - a.matchScore);
 
-        // Log the analysis result for debugging
-        console.log("Analysis result:", JSON.stringify(result, null, 2));
-        console.log(`Summary length: ${result.summary?.length}, Relevant reviews: ${result.relevantReviews?.length}`);
+        console.log(`Analyzed ${locationAnalyses.length} locations`);
+        console.log("Scores:", locationAnalyses.map(l => `${l.placeName}: ${l.matchScore}`));
 
-        return result;
+        return { locations: locationAnalyses };
       } catch (error: any) {
         console.error("Error analyzing reviews:", error);
         throw new functions.https.HttpsError(
