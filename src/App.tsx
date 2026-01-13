@@ -5,16 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Index from "./pages/Index";
-import IdeaDetail from "./pages/IdeaDetail";
-import SubmitIdea from "./pages/SubmitIdea";
 import Auth from "./pages/Auth";
-import Profile from "./pages/Profile";
-import Explore from "./pages/Explore";
-import EditIdea from "./pages/EditIdea";
-import Dashboard from "./pages/Dashboard";
-import Leaderboard from "./pages/Leaderboard";
-import SetupUsername from "./pages/SetupUsername";
+import Analyze from "./pages/Analyze";
+import Results from "./pages/Results";
 import NotFound from "./pages/NotFound";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -26,16 +21,9 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
-            <Route path="/idea/:id" element={<IdeaDetail />} />
-            <Route path="/submit" element={<SubmitIdea />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/explore" element={<Explore />} />
-            <Route path="/edit/:id" element={<EditIdea />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
-            <Route path="/setup-username" element={<SetupUsername />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="/analyze" element={<Analyze />} />
+            <Route path="/results" element={<Results />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Lightbulb, Loader2 } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Auth = () => {
   const navigate = useNavigate();
-  const { user, loading, needsUsername, signInWithGoogle } = useAuth();
+  const { user, loading, signInWithGoogle } = useAuth();
   const { toast } = useToast();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -15,13 +15,9 @@ const Auth = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (!loading && user) {
-      if (needsUsername) {
-        navigate("/setup-username");
-      } else {
-        navigate("/");
-      }
+      navigate("/analyze");
     }
-  }, [user, loading, needsUsername, navigate]);
+  }, [user, loading, navigate]);
 
   const handleGoogleSignIn = async () => {
     setIsSubmitting(true);
@@ -62,19 +58,19 @@ const Auth = () => {
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 mb-8">
           <div className="w-12 h-12 rounded-xl bg-gradient-hero flex items-center justify-center shadow-glow">
-            <Lightbulb className="w-6 h-6 text-primary-foreground" />
+            <Search className="w-6 h-6 text-primary-foreground" />
           </div>
-          <span className="font-display font-bold text-2xl">IdeaHunt</span>
+          <span className="font-display font-bold text-2xl">ReviewLens</span>
         </div>
 
         {/* Auth Card */}
         <div className="bg-card border border-border rounded-2xl p-8 shadow-lg">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-display font-bold mb-2">
-              Welcome to IdeaHunt
+              Welcome to ReviewLens
             </h1>
             <p className="text-muted-foreground">
-              Sign in to start validating your ideas
+              Sign in to start analyzing reviews
             </p>
           </div>
 
@@ -114,7 +110,7 @@ const Auth = () => {
         {/* Back to home */}
         <p className="text-center mt-6 text-muted-foreground">
           <a href="/" className="hover:text-foreground transition-colors">
-            ← Back to home
+            Back to home
           </a>
         </p>
       </div>
