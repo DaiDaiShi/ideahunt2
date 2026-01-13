@@ -75,6 +75,10 @@ export const fetchReviews = functions
           startUrls: [{ url }],
           maxReviews: 50,
           language: "en",
+          reviewsSort: "newest",
+          scrapeReviewerName: true,
+          scrapeReviewerUrl: false,
+          scrapeResponseFromOwner: false,
         };
 
         // Start the actor run
@@ -115,23 +119,58 @@ export const fetchReviews = functions
         }
 
         if (dataset && dataset.length > 0) {
-          const placeData = dataset[0];
-          const reviews: Review[] = (placeData.reviews || []).map(
-            (r: any) => ({
-              text: r.text || r.snippet || "",
-              rating: r.stars || r.rating || 0,
-              reviewer: r.name || r.author || "Anonymous",
-              date: r.publishedAtDate || r.time || "Unknown",
-            })
-          );
+          // Log for debugging
+          console.log(`Dataset has ${dataset.length} items`);
+          console.log("First item keys:", Object.keys(dataset[0]));
+
+          // Log full first item to see structure
+          console.log("Full first item:", JSON.stringify(dataset[0], null, 2).substring(0, 3000));
+
+          // If there are more items, log one
+          if (dataset.length > 1) {
+            console.log("Second item keys:", Object.keys(dataset[1]));
+            console.log("Second item sample:", JSON.stringify(dataset[1], null, 2).substring(0, 1000));
+          }
+
+          // The Apify actor returns reviews as separate items in the dataset
+          // Find the place info (has 'title' or 'placeId') and reviews (have 'text' or 'reviewText')
+          let placeName = "Unknown Place";
+          const reviews: Review[] = [];
+
+          for (const item of dataset) {
+            // Check if this is place info (has title but no review text)
+            if (item.title && !item.text && !item.reviewText) {
+              placeName = item.title;
+              console.log("Found place:", placeName);
+            }
+
+            // Check if this is a review (has text content)
+            const reviewText = item.text || item.reviewText || item.textTranslated || "";
+            if (reviewText) {
+              reviews.push({
+                text: reviewText,
+                rating: item.stars || item.rating || item.reviewRating || 0,
+                reviewer: item.name || item.author || item.reviewerName || item.userName || "Anonymous",
+                date: item.publishedAtDate || item.time || item.reviewDate || item.date || "Unknown",
+              });
+            }
+          }
+
+          console.log(`Found place: ${placeName}, reviews: ${reviews.length}`);
 
           allPlaceReviews.push({
             url,
-            placeName: placeData.title || placeData.name || "Unknown Place",
+            placeName,
             reviews,
           });
+        } else {
+          console.log("No dataset returned for URL:", url);
         }
       }
+
+      // Log the fetched data for debugging
+      console.log("Fetched reviews:", JSON.stringify(allPlaceReviews, null, 2));
+      console.log(`Total places: ${allPlaceReviews.length}, Total reviews: ${allPlaceReviews.reduce((sum, p) => sum + p.reviews.length, 0)}`);
 
       return { reviews: allPlaceReviews };
     } catch (error: any) {
@@ -244,6 +283,11 @@ Format your response as JSON:
         }
 
         const result = JSON.parse(content);
+
+        // Log the analysis result for debugging
+        console.log("Analysis result:", JSON.stringify(result, null, 2));
+        console.log(`Summary length: ${result.summary?.length}, Relevant reviews: ${result.relevantReviews?.length}`);
+
         return result;
       } catch (error: any) {
         console.error("Error analyzing reviews:", error);
