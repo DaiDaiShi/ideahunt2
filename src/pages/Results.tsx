@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useNavigate, useLocation, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -21,7 +21,11 @@ import {
   Trophy,
   ThumbsUp,
   ThumbsDown,
+  Share2,
+  Check,
 } from "lucide-react";
+import { toast } from "sonner";
+import { saveResult, getResult } from "@/integrations/firebase/resultService";
 
 interface Review {
   text: string;
@@ -107,12 +111,19 @@ const Results = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { resultId: urlResultId } = useParams<{ resultId: string }>();
 
   const [expandedLocation, setExpandedLocation] = useState<number | null>(null);
   const [selectedChip, setSelectedChip] = useState<{
     locationIndex: number;
     chipIndex: number;
   } | null>(null);
+  const [resultId, setResultId] = useState<string | null>(urlResultId || null);
+  const [isLoading, setIsLoading] = useState(!!urlResultId);
+  const [isCopied, setIsCopied] = useState(false);
+  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [criteria, setCriteria] = useState("");
+  const [redFlags, setRedFlags] = useState("");
 
   const state = location.state as {
     analysis: AnalysisResult;
@@ -120,19 +131,81 @@ const Results = () => {
     redFlags: string;
   } | null;
 
+  // Load result from URL param or save new result from state
   useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/auth");
-    }
-  }, [user, authLoading, navigate]);
+    const loadOrSaveResult = async () => {
+      // If we have a URL param, load from Firestore
+      if (urlResultId) {
+        setIsLoading(true);
+        try {
+          const storedResult = await getResult(urlResultId);
+          if (storedResult) {
+            setAnalysis({ locations: storedResult.locations });
+            setCriteria(storedResult.criteria);
+            setRedFlags(storedResult.redFlags);
+            setResultId(urlResultId);
+          } else {
+            toast.error("Result not found");
+            navigate("/analyze");
+          }
+        } catch (error) {
+          console.error("Error loading result:", error);
+          toast.error("Failed to load result");
+          navigate("/analyze");
+        } finally {
+          setIsLoading(false);
+        }
+        return;
+      }
 
-  useEffect(() => {
-    if (!state?.analysis) {
-      navigate("/analyze");
-    }
-  }, [state, navigate]);
+      // If we have state from analysis, save it and update URL
+      if (state?.analysis && user) {
+        setAnalysis(state.analysis);
+        setCriteria(state.criteria);
+        setRedFlags(state.redFlags || "");
 
-  if (authLoading) {
+        try {
+          const newResultId = await saveResult(
+            user.id,
+            state.criteria,
+            state.redFlags || "",
+            state.analysis.locations
+          );
+          setResultId(newResultId);
+          // Update URL without navigation
+          window.history.replaceState(null, "", `/results/${newResultId}`);
+        } catch (error) {
+          console.error("Error saving result:", error);
+          // Still show results even if save fails
+        }
+        return;
+      }
+
+      // No URL param and no state - redirect to analyze
+      if (!authLoading && !urlResultId && !state?.analysis) {
+        navigate("/analyze");
+      }
+    };
+
+    if (!authLoading) {
+      loadOrSaveResult();
+    }
+  }, [urlResultId, state, user, authLoading, navigate]);
+
+  const handleShare = async () => {
+    if (!resultId) return;
+    const shareUrl = `${window.location.origin}/results/${resultId}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setIsCopied(true);
+      toast.success("Link copied to clipboard!");
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (error) {
+      toast.error("Failed to copy link");
+    }
+  };
+
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -140,11 +213,9 @@ const Results = () => {
     );
   }
 
-  if (!state?.analysis) {
+  if (!analysis) {
     return null;
   }
-
-  const { analysis, criteria, redFlags } = state;
 
   const renderStars = (rating: number) => {
     return (
@@ -232,14 +303,36 @@ const Results = () => {
           </Card>
 
           {/* Results Header */}
-          <div className="mb-6">
-            <h1 className="font-display text-2xl font-bold mb-2">
-              {analysis.locations.length} Location
-              {analysis.locations.length !== 1 ? "s" : ""} Analyzed
-            </h1>
-            <p className="text-muted-foreground">
-              Ranked by how well they match your preferences
-            </p>
+          <div className="mb-6 flex items-start justify-between">
+            <div>
+              <h1 className="font-display text-2xl font-bold mb-2">
+                {analysis.locations.length} Location
+                {analysis.locations.length !== 1 ? "s" : ""} Analyzed
+              </h1>
+              <p className="text-muted-foreground">
+                Ranked by how well they match your preferences
+              </p>
+            </div>
+            {resultId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleShare}
+                className="shrink-0"
+              >
+                {isCopied ? (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-4 h-4 mr-2" />
+                    Share
+                  </>
+                )}
+              </Button>
+            )}
           </div>
 
           {/* Location Cards */}
