@@ -30,6 +30,11 @@ interface AnalysisResult {
       date: string;
       relevanceReason?: string;
     }>;
+    monthlyReviews: Array<{
+      month: string;
+      positiveCount: number;
+      negativeCount: number;
+    }>;
   }>;
 }
 

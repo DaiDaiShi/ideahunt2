@@ -171,6 +171,13 @@ interface Chip {
   reviewIndices: number[]; // indices of reviews that match this chip
 }
 
+// Monthly review counts for past 12 months
+interface MonthlyReviewCount {
+  month: string; // "Jan", "Feb", etc.
+  positiveCount: number; // 4-5 star reviews
+  negativeCount: number; // 1-2 star reviews
+}
+
 // Analysis result for a single location
 interface LocationAnalysis {
   url: string;
@@ -179,6 +186,45 @@ interface LocationAnalysis {
   summary: string;
   chips: Chip[];
   reviews: Array<Review & { relevanceReason?: string }>;
+  monthlyReviews: MonthlyReviewCount[];
+}
+
+// Helper to compute monthly positive/negative review counts for past 12 months
+function computeMonthlyReviews(reviews: Review[]): MonthlyReviewCount[] {
+  const now = new Date();
+  const result: MonthlyReviewCount[] = [];
+
+  // Generate past 12 months (most recent first)
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
+    const monthName = d.toLocaleDateString("en-US", { month: "short" });
+
+    let positiveCount = 0;
+    let negativeCount = 0;
+
+    for (const review of reviews) {
+      const reviewDate = new Date(review.date);
+      if (!isNaN(reviewDate.getTime())) {
+        const reviewMonthKey = `${reviewDate.getFullYear()}-${reviewDate.getMonth()}`;
+        if (reviewMonthKey === monthKey) {
+          if (review.rating >= 4) {
+            positiveCount++;
+          } else if (review.rating <= 2) {
+            negativeCount++;
+          }
+        }
+      }
+    }
+
+    result.push({
+      month: monthName,
+      positiveCount,
+      negativeCount,
+    });
+  }
+
+  return result;
 }
 
 // Analyze reviews using OpenAI - now returns per-location analysis
@@ -228,6 +274,7 @@ export const analyzeReviews = functions
               summary: "No reviews with text available for this location.",
               chips: [],
               reviews: [],
+              monthlyReviews: computeMonthlyReviews([]),
             });
             continue;
           }
@@ -311,6 +358,7 @@ Generate 3-8 chips that capture the main themes. Only include reviews that are a
             summary: result.summary || "",
             chips: result.chips || [],
             reviews: reviewsWithReasons,
+            monthlyReviews: computeMonthlyReviews(place.reviews),
           });
         }
 

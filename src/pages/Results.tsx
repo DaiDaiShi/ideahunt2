@@ -19,6 +19,8 @@ import {
   ChevronUp,
   ExternalLink,
   Trophy,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 
 interface Review {
@@ -35,6 +37,12 @@ interface Chip {
   reviewIndices: number[];
 }
 
+interface MonthlyReviewCount {
+  month: string;
+  positiveCount: number;
+  negativeCount: number;
+}
+
 interface LocationAnalysis {
   url: string;
   placeName: string;
@@ -42,11 +50,54 @@ interface LocationAnalysis {
   summary: string;
   chips: Chip[];
   reviews: Review[];
+  monthlyReviews: MonthlyReviewCount[];
 }
 
 interface AnalysisResult {
   locations: LocationAnalysis[];
 }
+
+// Component for monthly review counts row
+const MonthlyReviewRow = ({
+  data,
+  type,
+}: {
+  data: MonthlyReviewCount[];
+  type: "positive" | "negative";
+}) => {
+  const bgColor = type === "positive" ? "bg-green-500" : "bg-red-500";
+  const iconColor = type === "positive" ? "text-green-600" : "text-red-600";
+
+  return (
+    <div className="flex items-center gap-1 mt-2">
+      <Calendar className={`w-3.5 h-3.5 ${iconColor} shrink-0`} />
+      <div className="flex gap-0.5">
+        {data.map((month, i) => {
+          const count =
+            type === "positive" ? month.positiveCount : month.negativeCount;
+          return (
+            <div
+              key={i}
+              className="flex flex-col items-center"
+              title={`${month.month}: ${count} review${count !== 1 ? "s" : ""}`}
+            >
+              <div
+                className={`w-6 h-5 rounded-sm flex items-center justify-center text-xs font-medium ${
+                  count > 0 ? `${bgColor} text-white` : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {count > 0 ? count : ""}
+              </div>
+              <span className="text-[9px] text-muted-foreground mt-0.5">
+                {month.month}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const Results = () => {
   const { user, loading: authLoading } = useAuth();
@@ -54,7 +105,10 @@ const Results = () => {
   const location = useLocation();
 
   const [expandedLocation, setExpandedLocation] = useState<number | null>(null);
-  const [selectedChip, setSelectedChip] = useState<{ locationIndex: number; chipIndex: number } | null>(null);
+  const [selectedChip, setSelectedChip] = useState<{
+    locationIndex: number;
+    chipIndex: number;
+  } | null>(null);
 
   const state = location.state as {
     analysis: AnalysisResult;
@@ -95,7 +149,9 @@ const Results = () => {
           <Star
             key={star}
             className={`w-3.5 h-3.5 ${
-              star <= rating ? "text-yellow-500 fill-yellow-500" : "text-gray-300"
+              star <= rating
+                ? "text-yellow-500 fill-yellow-500"
+                : "text-gray-300"
             }`}
           />
         ))}
@@ -117,21 +173,14 @@ const Results = () => {
 
   const getRankBadge = (index: number) => {
     if (index === 0) return <Trophy className="w-5 h-5 text-yellow-500" />;
-    return <span className="text-muted-foreground font-medium">#{index + 1}</span>;
+    return (
+      <span className="text-muted-foreground font-medium">#{index + 1}</span>
+    );
   };
 
   const toggleLocation = (index: number) => {
     setExpandedLocation(expandedLocation === index ? null : index);
     setSelectedChip(null);
-  };
-
-  const handleChipClick = (locationIndex: number, chipIndex: number) => {
-    if (selectedChip?.locationIndex === locationIndex && selectedChip?.chipIndex === chipIndex) {
-      setSelectedChip(null);
-    } else {
-      setSelectedChip({ locationIndex, chipIndex });
-      setExpandedLocation(locationIndex);
-    }
   };
 
   const getFilteredReviews = (locationIndex: number, loc: LocationAnalysis) => {
@@ -181,7 +230,8 @@ const Results = () => {
           {/* Results Header */}
           <div className="mb-6">
             <h1 className="font-display text-2xl font-bold mb-2">
-              {analysis.locations.length} Location{analysis.locations.length !== 1 ? "s" : ""} Analyzed
+              {analysis.locations.length} Location
+              {analysis.locations.length !== 1 ? "s" : ""} Analyzed
             </h1>
             <p className="text-muted-foreground">
               Ranked by how well they match your preferences
@@ -193,6 +243,12 @@ const Results = () => {
             {analysis.locations.map((loc, locIndex) => {
               const isExpanded = expandedLocation === locIndex;
               const filteredReviews = getFilteredReviews(locIndex, loc);
+              const positiveChips = loc.chips.filter(
+                (c) => c.type === "positive"
+              );
+              const negativeChips = loc.chips.filter(
+                (c) => c.type === "negative"
+              );
 
               return (
                 <Card key={locIndex} className="overflow-hidden">
@@ -238,28 +294,120 @@ const Results = () => {
                       </div>
                     </div>
 
-                    {/* Chips - Always visible */}
-                    {loc.chips.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-4" onClick={(e) => e.stopPropagation()}>
-                        {loc.chips.map((chip, chipIndex) => (
-                          <Badge
-                            key={chipIndex}
-                            variant="outline"
-                            className={`cursor-pointer transition-all ${
-                              chip.type === "positive"
-                                ? "bg-green-500/10 text-green-700 border-green-500/30 hover:bg-green-500/20"
-                                : "bg-red-500/10 text-red-700 border-red-500/30 hover:bg-red-500/20"
-                            } ${
-                              selectedChip?.locationIndex === locIndex && selectedChip?.chipIndex === chipIndex
-                                ? "ring-2 ring-offset-1 ring-primary"
-                                : ""
-                            }`}
-                            onClick={() => handleChipClick(locIndex, chipIndex)}
-                          >
-                            {chip.label}
-                            <span className="ml-1 opacity-60">({chip.reviewIndices.length})</span>
-                          </Badge>
-                        ))}
+                    {/* Positive section: chips + monthly counts */}
+                    {(positiveChips.length > 0 ||
+                      loc.monthlyReviews?.some((m) => m.positiveCount > 0)) && (
+                      <div
+                        className="mt-4 space-y-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {positiveChips.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <ThumbsUp className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                            <div className="flex flex-wrap gap-2">
+                              {positiveChips.map((chip, chipIndex) => {
+                                const actualIndex = loc.chips.indexOf(chip);
+                                return (
+                                  <Badge
+                                    key={chipIndex}
+                                    variant="outline"
+                                    className={`cursor-pointer transition-all bg-green-500/10 text-green-700 border-green-500/30 hover:bg-green-500/20 ${
+                                      selectedChip?.locationIndex === locIndex &&
+                                      selectedChip?.chipIndex === actualIndex
+                                        ? "ring-2 ring-offset-1 ring-green-500"
+                                        : ""
+                                    }`}
+                                    onClick={() => {
+                                      const idx = loc.chips.indexOf(chip);
+                                      if (
+                                        selectedChip?.locationIndex ===
+                                          locIndex &&
+                                        selectedChip?.chipIndex === idx
+                                      ) {
+                                        setSelectedChip(null);
+                                      } else {
+                                        setSelectedChip({
+                                          locationIndex: locIndex,
+                                          chipIndex: idx,
+                                        });
+                                        setExpandedLocation(locIndex);
+                                      }
+                                    }}
+                                  >
+                                    {chip.label}
+                                    <span className="ml-1 opacity-60">
+                                      ({chip.reviewIndices.length})
+                                    </span>
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {loc.monthlyReviews && (
+                          <MonthlyReviewRow
+                            data={loc.monthlyReviews}
+                            type="positive"
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Negative section: chips + monthly counts */}
+                    {(negativeChips.length > 0 || loc.monthlyReviews) && (
+                      <div
+                        className="mt-3 space-y-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {negativeChips.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <ThumbsDown className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                            <div className="flex flex-wrap gap-2">
+                              {negativeChips.map((chip, chipIndex) => {
+                                const actualIndex = loc.chips.indexOf(chip);
+                                return (
+                                  <Badge
+                                    key={chipIndex}
+                                    variant="outline"
+                                    className={`cursor-pointer transition-all bg-red-500/10 text-red-700 border-red-500/30 hover:bg-red-500/20 ${
+                                      selectedChip?.locationIndex === locIndex &&
+                                      selectedChip?.chipIndex === actualIndex
+                                        ? "ring-2 ring-offset-1 ring-red-500"
+                                        : ""
+                                    }`}
+                                    onClick={() => {
+                                      const idx = loc.chips.indexOf(chip);
+                                      if (
+                                        selectedChip?.locationIndex ===
+                                          locIndex &&
+                                        selectedChip?.chipIndex === idx
+                                      ) {
+                                        setSelectedChip(null);
+                                      } else {
+                                        setSelectedChip({
+                                          locationIndex: locIndex,
+                                          chipIndex: idx,
+                                        });
+                                        setExpandedLocation(locIndex);
+                                      }
+                                    }}
+                                  >
+                                    {chip.label}
+                                    <span className="ml-1 opacity-60">
+                                      ({chip.reviewIndices.length})
+                                    </span>
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {loc.monthlyReviews && (
+                          <MonthlyReviewRow
+                            data={loc.monthlyReviews}
+                            type="negative"
+                          />
+                        )}
                       </div>
                     )}
                   </CardHeader>
@@ -280,7 +428,8 @@ const Results = () => {
                         <div className="space-y-3">
                           <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                             <MapPin className="w-4 h-4" />
-                            {selectedChip !== null
+                            {selectedChip !== null &&
+                            selectedChip.locationIndex === locIndex
                               ? `Reviews mentioning "${loc.chips[selectedChip.chipIndex]?.label}"`
                               : "Relevant Reviews"}
                           </h4>
@@ -295,7 +444,9 @@ const Results = () => {
                                   <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center">
                                     <User className="w-3 h-3 text-muted-foreground" />
                                   </div>
-                                  <span className="text-sm font-medium">{review.reviewer}</span>
+                                  <span className="text-sm font-medium">
+                                    {review.reviewer}
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {renderStars(review.rating)}
@@ -335,7 +486,8 @@ const Results = () => {
             <Card>
               <CardContent className="py-12 text-center">
                 <p className="text-muted-foreground">
-                  No locations could be analyzed. Please check your Google Maps links and try again.
+                  No locations could be analyzed. Please check your Google Maps
+                  links and try again.
                 </p>
               </CardContent>
             </Card>
