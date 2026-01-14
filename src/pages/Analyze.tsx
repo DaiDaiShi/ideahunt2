@@ -302,7 +302,7 @@ const Analyze = () => {
               {links.map((link, index) => (
                 <div key={index} className="flex gap-2">
                   <Input
-                    placeholder="https://maps.google.com/..."
+                    placeholder="https://maps.app.goo.gl/..."
                     value={link}
                     onChange={(e) => updateLink(index, e.target.value)}
                     disabled={isAnalyzing}
