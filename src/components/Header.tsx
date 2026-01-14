@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Search, Menu, LogOut, User, History, Loader2 } from "lucide-react";
+import { Search, Menu, LogOut, User, History, Loader2, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,6 +16,7 @@ import { getUserResults, UserResultRef } from "@/integrations/firebase/resultSer
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [recentAnalyses, setRecentAnalyses] = useState<UserResultRef[]>([]);
+  const [hasMoreAnalyses, setHasMoreAnalyses] = useState(false);
   const [loadingAnalyses, setLoadingAnalyses] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { user, signOut } = useAuth();
@@ -27,7 +28,8 @@ const Header = () => {
         setLoadingAnalyses(true);
         try {
           const results = await getUserResults(user.id);
-          setRecentAnalyses(results.slice(0, 5));
+          setHasMoreAnalyses(results.length > 4);
+          setRecentAnalyses(results.slice(0, 4));
         } catch (error) {
           console.error("Error loading analyses:", error);
         } finally {
@@ -103,23 +105,37 @@ const Header = () => {
                         Loading...
                       </DropdownMenuItem>
                     ) : recentAnalyses.length > 0 ? (
-                      recentAnalyses.map((analysis) => (
-                        <DropdownMenuItem
-                          key={analysis.resultId}
-                          onClick={() => {
-                            navigate(`/results/${analysis.resultId}`);
-                            setDropdownOpen(false);
-                          }}
-                          className="flex flex-col items-start gap-0.5 cursor-pointer"
-                        >
-                          <span className="text-sm truncate w-full">
-                            {analysis.title}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {analysis.locationCount} location{analysis.locationCount !== 1 ? "s" : ""} · {formatDate(analysis.createdAt)}
-                          </span>
-                        </DropdownMenuItem>
-                      ))
+                      <>
+                        {recentAnalyses.map((analysis) => (
+                          <DropdownMenuItem
+                            key={analysis.resultId}
+                            onClick={() => {
+                              navigate(`/results/${analysis.resultId}`);
+                              setDropdownOpen(false);
+                            }}
+                            className="flex flex-col items-start gap-0.5 cursor-pointer"
+                          >
+                            <span className="text-sm truncate w-full">
+                              {analysis.title}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {analysis.locationCount} location{analysis.locationCount !== 1 ? "s" : ""} · {formatDate(analysis.createdAt)}
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                        {hasMoreAnalyses && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              navigate("/history");
+                              setDropdownOpen(false);
+                            }}
+                            className="flex items-center justify-between cursor-pointer text-primary"
+                          >
+                            <span className="text-sm">See all analyses</span>
+                            <ChevronRight className="w-4 h-4" />
+                          </DropdownMenuItem>
+                        )}
+                      </>
                     ) : (
                       <DropdownMenuItem disabled className="text-muted-foreground text-sm">
                         No analyses yet

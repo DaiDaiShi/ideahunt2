@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Analyze from "./pages/Analyze";
 import Results from "./pages/Results";
+import History from "./pages/History";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/analyze" element={<Analyze />} />
             <Route path="/results" element={<Results />} />
             <Route path="/results/:resultId" element={<Results />} />
+            <Route path="/history" element={<History />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
