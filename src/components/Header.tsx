@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Search, Menu, LogOut, User } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Search, Menu, LogOut, User, History, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import {
   DropdownMenu,
@@ -9,14 +9,47 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { getUserResults, UserResultRef } from "@/integrations/firebase/resultService";
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [recentAnalyses, setRecentAnalyses] = useState<UserResultRef[]>([]);
+  const [loadingAnalyses, setLoadingAnalyses] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const loadRecentAnalyses = async () => {
+      if (dropdownOpen && user) {
+        setLoadingAnalyses(true);
+        try {
+          const results = await getUserResults(user.id);
+          setRecentAnalyses(results.slice(0, 5));
+        } catch (error) {
+          console.error("Error loading analyses:", error);
+        } finally {
+          setLoadingAnalyses(false);
+        }
+      }
+    };
+    loadRecentAnalyses();
+  }, [dropdownOpen, user]);
 
   const handleSignOut = async () => {
     await signOut();
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const truncateCriteria = (criteria: string, maxLength: number = 30) => {
+    if (criteria.length <= maxLength) return criteria;
+    return criteria.substring(0, maxLength) + "...";
   };
 
   return (
@@ -53,16 +86,50 @@ const Header = () => {
                     New Analysis
                   </Link>
                 </Button>
-                <DropdownMenu>
+                <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="icon" className="rounded-full">
                       <User className="w-4 h-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem className="text-muted-foreground text-sm">
-                      {user.user_name || user.email}
-                    </DropdownMenuItem>
+                  <DropdownMenuContent align="end" className="w-64">
+                    <DropdownMenuLabel className="font-normal">
+                      <p className="text-sm font-medium">{user.displayName || user.user_name}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-xs text-muted-foreground flex items-center gap-1">
+                      <History className="w-3 h-3" />
+                      My Analyses
+                    </DropdownMenuLabel>
+                    {loadingAnalyses ? (
+                      <DropdownMenuItem disabled>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Loading...
+                      </DropdownMenuItem>
+                    ) : recentAnalyses.length > 0 ? (
+                      recentAnalyses.map((analysis) => (
+                        <DropdownMenuItem
+                          key={analysis.resultId}
+                          onClick={() => {
+                            navigate(`/results/${analysis.resultId}`);
+                            setDropdownOpen(false);
+                          }}
+                          className="flex flex-col items-start gap-0.5 cursor-pointer"
+                        >
+                          <span className="text-sm truncate w-full">
+                            {truncateCriteria(analysis.criteria)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {analysis.locationCount} location{analysis.locationCount !== 1 ? "s" : ""} · {formatDate(analysis.createdAt)}
+                          </span>
+                        </DropdownMenuItem>
+                      ))
+                    ) : (
+                      <DropdownMenuItem disabled className="text-muted-foreground text-sm">
+                        No analyses yet
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
                       <LogOut className="w-4 h-4 mr-2" />
