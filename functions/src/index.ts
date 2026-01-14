@@ -32,6 +32,8 @@ interface Review {
 interface PlaceReviews {
   url: string;
   placeName: string;
+  totalScore: number; // Overall Google Maps rating (e.g., 4.5)
+  reviewsCount: number; // Total number of reviews on Google Maps
   reviews: Review[];
 }
 
@@ -120,12 +122,17 @@ export const fetchReviews = functions
 
         if (dataset && dataset.length > 0) {
           let placeName = "Unknown Place";
+          let totalScore = 0;
+          let reviewsCount = 0;
           const reviews: Review[] = [];
 
           for (const item of dataset) {
             // Check if this is place info (has title but no review text)
             if (item.title && !item.text && !item.reviewText) {
               placeName = item.title;
+              // Extract overall rating and total review count from place info
+              totalScore = item.totalScore || item.rating || item.averageRating || 0;
+              reviewsCount = item.reviewsCount || item.totalReviews || item.reviewCount || 0;
             }
 
             // Check if this is a review WITH text content (skip rating-only reviews)
@@ -140,11 +147,13 @@ export const fetchReviews = functions
             }
           }
 
-          console.log(`Found place: ${placeName}, reviews with text: ${reviews.length}`);
+          console.log(`Found place: ${placeName}, rating: ${totalScore}, total reviews: ${reviewsCount}, analyzed: ${reviews.length}`);
 
           allPlaceReviews.push({
             url,
             placeName,
+            totalScore,
+            reviewsCount,
             reviews,
           });
         } else {
@@ -182,6 +191,8 @@ interface MonthlyReviewCount {
 interface LocationAnalysis {
   url: string;
   placeName: string;
+  totalScore: number; // Overall Google Maps rating
+  reviewsCount: number; // Total reviews on Google Maps
   matchScore: number; // 0-100 score for ranking
   summary: string;
   chips: Chip[];
@@ -309,6 +320,8 @@ export const analyzeReviews = functions
             locationAnalyses.push({
               url: place.url,
               placeName: place.placeName,
+              totalScore: place.totalScore,
+              reviewsCount: place.reviewsCount,
               matchScore: 0,
               summary: "No reviews with text available for this location.",
               chips: [],
@@ -405,6 +418,8 @@ CHIP RULES:
           locationAnalyses.push({
             url: place.url,
             placeName: place.placeName,
+            totalScore: place.totalScore,
+            reviewsCount: place.reviewsCount,
             matchScore: Math.max(0, Math.min(100, result.matchScore || 50)),
             summary: fullSummary,
             chips: validChips,

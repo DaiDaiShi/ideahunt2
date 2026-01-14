@@ -18,6 +18,8 @@ export interface StoredResult {
   locations: Array<{
     url: string;
     placeName: string;
+    totalScore: number;
+    reviewsCount: number;
     matchScore: number;
     summary: string;
     chips: Array<{

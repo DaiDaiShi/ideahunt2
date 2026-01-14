@@ -43,6 +43,8 @@ interface Chip {
 interface LocationAnalysis {
   url: string;
   placeName: string;
+  totalScore: number;
+  reviewsCount: number;
   matchScore: number;
   summary: string;
   chips: Chip[];
@@ -333,9 +335,16 @@ const Results = () => {
                               <ExternalLink className="w-4 h-4" />
                             </a>
                           </CardTitle>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {loc.reviews.length} reviews analyzed
-                          </p>
+                          <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
+                            {loc.totalScore > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                                <span className="font-medium text-foreground">{loc.totalScore.toFixed(1)}</span>
+                                <span>({loc.reviewsCount.toLocaleString()} reviews)</span>
+                              </span>
+                            )}
+                            <span>· {loc.reviews.length} analyzed</span>
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
