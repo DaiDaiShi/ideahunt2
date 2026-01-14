@@ -418,3 +418,72 @@ Generate 3-8 chips that capture the main themes. Only include reviews that are a
       }
     }
   );
+
+// Generate common aspects for a location type
+export const generateAspects = functions
+  .runWith({ timeoutSeconds: 30, memory: "256MB" })
+  .https.onCall(async (data: { locationType: string }, context) => {
+    // Check authentication
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "User must be authenticated"
+      );
+    }
+
+    const { locationType } = data;
+
+    if (!locationType || locationType.trim().length === 0) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Location type is required"
+      );
+    }
+
+    try {
+      const openai = new OpenAI({ apiKey: getOpenAIKey() });
+
+      const prompt = `For "${locationType}", generate two lists:
+1. 10 common positive aspects that customers typically look for and appreciate
+2. 10 common negative aspects (red flags) that customers typically complain about or want to avoid
+
+Be specific and practical. Use short phrases (2-4 words each).
+
+Respond with JSON:
+{
+  "positiveAspects": ["aspect1", "aspect2", ...],
+  "negativeAspects": ["aspect1", "aspect2", ...]
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are a helpful assistant that generates common review aspects for different types of businesses. Keep phrases short and practical.",
+          },
+          { role: "user", content: prompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.7,
+      });
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("No response from OpenAI");
+      }
+
+      const result = JSON.parse(content);
+
+      return {
+        positiveAspects: result.positiveAspects || [],
+        negativeAspects: result.negativeAspects || [],
+      };
+    } catch (error: any) {
+      console.error("Error generating aspects:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        `Failed to generate aspects: ${error.message}`
+      );
+    }
+  });

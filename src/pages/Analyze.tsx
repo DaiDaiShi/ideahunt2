@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, X, Search, Loader2, MapPin, AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -43,10 +44,14 @@ const Analyze = () => {
   const navigate = useNavigate();
 
   const [links, setLinks] = useState<string[]>([""]);
+  const [locationType, setLocationType] = useState("");
   const [criteria, setCriteria] = useState("");
   const [redFlags, setRedFlags] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
+  const [isGeneratingAspects, setIsGeneratingAspects] = useState(false);
+  const [suggestedPositive, setSuggestedPositive] = useState<string[]>([]);
+  const [suggestedNegative, setSuggestedNegative] = useState<string[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -55,7 +60,7 @@ const Analyze = () => {
   }, [user, authLoading, navigate]);
 
   const addLink = () => {
-    if (links.length < 10) {
+    if (links.length < 5) {
       setLinks([...links, ""]);
     }
   };
@@ -75,6 +80,48 @@ const Analyze = () => {
   const isValidGoogleMapsLink = (url: string): boolean => {
     if (!url.trim()) return false;
     return url.includes("google.com/maps") || url.includes("goo.gl/maps") || url.includes("maps.app.goo.gl");
+  };
+
+  const handleGenerateAspects = async () => {
+    if (!locationType.trim()) {
+      toast.error("Please enter what type of locations these are");
+      return;
+    }
+
+    setIsGeneratingAspects(true);
+    try {
+      const functions = getFunctions();
+      const generateAspects = httpsCallable(functions, "generateAspects");
+      const result = await generateAspects({ locationType: locationType.trim() });
+      const data = result.data as { positiveAspects: string[]; negativeAspects: string[] };
+      setSuggestedPositive(data.positiveAspects || []);
+      setSuggestedNegative(data.negativeAspects || []);
+    } catch (error: any) {
+      console.error("Error generating aspects:", error);
+      toast.error("Failed to generate suggestions. Please try again.");
+    } finally {
+      setIsGeneratingAspects(false);
+    }
+  };
+
+  const addToCriteria = (aspect: string) => {
+    const current = criteria.trim();
+    if (current.toLowerCase().includes(aspect.toLowerCase())) {
+      return; // Already included
+    }
+    setCriteria(current ? `${current}, ${aspect}` : aspect);
+    // Remove from suggested list
+    setSuggestedPositive(suggestedPositive.filter((a) => a !== aspect));
+  };
+
+  const addToRedFlags = (aspect: string) => {
+    const current = redFlags.trim();
+    if (current.toLowerCase().includes(aspect.toLowerCase())) {
+      return; // Already included
+    }
+    setRedFlags(current ? `${current}, ${aspect}` : aspect);
+    // Remove from suggested list
+    setSuggestedNegative(suggestedNegative.filter((a) => a !== aspect));
   };
 
   const handleAnalyze = async () => {
@@ -173,7 +220,7 @@ const Analyze = () => {
                 Google Maps Links
               </CardTitle>
               <CardDescription>
-                Add up to 10 places you want to compare ({links.length}/10)
+                Add up to 5 places you want to compare ({links.length}/5)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -199,7 +246,7 @@ const Analyze = () => {
                 </div>
               ))}
 
-              {links.length < 10 && (
+              {links.length < 5 && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -217,6 +264,94 @@ const Analyze = () => {
           <Card className="mt-6">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
+                <Building2 className="w-5 h-5" />
+                What Are These Places?
+              </CardTitle>
+              <CardDescription>
+                Tell us the type of locations and we'll suggest common aspects to look for
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g., restaurants, hotels, dental clinics, gyms..."
+                  value={locationType}
+                  onChange={(e) => setLocationType(e.target.value)}
+                  disabled={isAnalyzing || isGeneratingAspects}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleGenerateAspects();
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleGenerateAspects}
+                  disabled={isAnalyzing || isGeneratingAspects || !locationType.trim()}
+                >
+                  {isGeneratingAspects ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Suggest
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {(suggestedPositive.length > 0 || suggestedNegative.length > 0) && (
+                <div className="space-y-3 pt-2">
+                  {suggestedPositive.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <ThumbsUp className="w-3 h-3 text-green-600" />
+                        Click to add to "Aspects you care about"
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {suggestedPositive.map((aspect, i) => (
+                          <Badge
+                            key={i}
+                            variant="outline"
+                            className="cursor-pointer bg-green-500/10 text-green-700 border-green-500/30 hover:bg-green-500/20"
+                            onClick={() => addToCriteria(aspect)}
+                          >
+                            + {aspect}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {suggestedNegative.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <ThumbsDown className="w-3 h-3 text-red-600" />
+                        Click to add to "Deal-breakers"
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {suggestedNegative.map((aspect, i) => (
+                          <Badge
+                            key={i}
+                            variant="outline"
+                            className="cursor-pointer bg-red-500/10 text-red-700 border-red-500/30 hover:bg-red-500/20"
+                            onClick={() => addToRedFlags(aspect)}
+                          >
+                            + {aspect}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
                 <Search className="w-5 h-5" />
                 What Do You Care About?
               </CardTitle>
@@ -226,10 +361,10 @@ const Analyze = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="criteria">Things you want to know about *</Label>
+                <Label htmlFor="criteria">Aspects you care about most *</Label>
                 <Textarea
                   id="criteria"
-                  placeholder="e.g., authentic Chinese food, good portion sizes, friendly service, clean environment, reasonable prices..."
+                  placeholder="e.g., authentic food, good service, clean environment, reasonable prices..."
                   value={criteria}
                   onChange={(e) => setCriteria(e.target.value)}
                   disabled={isAnalyzing}
@@ -240,11 +375,11 @@ const Analyze = () => {
               <div className="space-y-2">
                 <Label htmlFor="redFlags" className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-destructive" />
-                  Red flags to avoid (optional)
+                  Deal-breakers to watch for (optional)
                 </Label>
                 <Textarea
                   id="redFlags"
-                  placeholder="e.g., food poisoning, rude staff, long wait times, dirty bathrooms, hidden fees..."
+                  placeholder="e.g., food poisoning, rude staff, long wait times, hidden fees..."
                   value={redFlags}
                   onChange={(e) => setRedFlags(e.target.value)}
                   disabled={isAnalyzing}
