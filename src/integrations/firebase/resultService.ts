@@ -33,11 +33,6 @@ export interface StoredResult {
       date: string;
       relevanceReason?: string;
     }>;
-    monthlyReviews: Array<{
-      month: string;
-      positiveCount: number;
-      negativeCount: number;
-    }>;
   }>;
   createdAt: string;
 }

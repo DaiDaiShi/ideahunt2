@@ -41,12 +41,6 @@ interface Chip {
   reviewIndices: number[];
 }
 
-interface MonthlyReviewCount {
-  month: string;
-  positiveCount: number;
-  negativeCount: number;
-}
-
 interface LocationAnalysis {
   url: string;
   placeName: string;
@@ -54,58 +48,11 @@ interface LocationAnalysis {
   summary: string;
   chips: Chip[];
   reviews: Review[];
-  monthlyReviews: MonthlyReviewCount[];
 }
 
 interface AnalysisResult {
   locations: LocationAnalysis[];
 }
-
-// Component for monthly review counts row
-const MonthlyReviewRow = ({
-  data,
-  type,
-}: {
-  data: MonthlyReviewCount[];
-  type: "positive" | "negative";
-}) => {
-  const bgColor = type === "positive" ? "bg-green-500/10" : "bg-red-500/10";
-  const textColor = type === "positive" ? "text-green-700" : "text-red-700";
-  const iconColor = type === "positive" ? "text-green-600" : "text-red-600";
-
-  return (
-    <div className="flex items-start gap-3 mt-2">
-      <div className="flex flex-col items-center shrink-0" title="Reviews from the past 12 months">
-        <Calendar className={`w-3.5 h-3.5 ${iconColor}`} />
-        <span className="text-[8px] text-muted-foreground">1yr</span>
-      </div>
-      <div className="flex gap-0.5">
-        {data.map((month, i) => {
-          const count =
-            type === "positive" ? month.positiveCount : month.negativeCount;
-          return (
-            <div
-              key={i}
-              className="flex flex-col items-center"
-              title={`${month.month}: ${count} review${count !== 1 ? "s" : ""}`}
-            >
-              <div
-                className={`w-6 h-5 rounded-sm flex items-center justify-center text-xs font-medium ${
-                  count > 0 ? `${bgColor} ${textColor}` : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {count > 0 ? count : ""}
-              </div>
-              <span className="text-[9px] text-muted-foreground mt-0.5">
-                {month.month}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
 
 const Results = () => {
   const { user, loading: authLoading } = useAuth();
@@ -391,120 +338,103 @@ const Results = () => {
                       </div>
                     </div>
 
-                    {/* Positive section: chips + monthly counts */}
-                    {(positiveChips.length > 0 ||
-                      loc.monthlyReviews?.some((m) => m.positiveCount > 0)) && (
+                    {/* Positive chips */}
+                    {positiveChips.length > 0 && (
                       <div
-                        className="mt-4 space-y-1"
+                        className="mt-4"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {positiveChips.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            <ThumbsUp className="w-3.5 h-3.5 text-green-600 shrink-0" />
-                            <div className="flex flex-wrap gap-2">
-                              {positiveChips.map((chip, chipIndex) => {
-                                const actualIndex = loc.chips.indexOf(chip);
-                                return (
-                                  <Badge
-                                    key={chipIndex}
-                                    variant="outline"
-                                    className={`cursor-pointer transition-all bg-green-500/10 text-green-700 border-green-500/30 hover:bg-green-500/20 ${
-                                      selectedChip?.locationIndex === locIndex &&
-                                      selectedChip?.chipIndex === actualIndex
-                                        ? "ring-2 ring-offset-1 ring-green-500"
-                                        : ""
-                                    }`}
-                                    onClick={() => {
-                                      const idx = loc.chips.indexOf(chip);
-                                      if (
-                                        selectedChip?.locationIndex ===
-                                          locIndex &&
-                                        selectedChip?.chipIndex === idx
-                                      ) {
-                                        setSelectedChip(null);
-                                      } else {
-                                        setSelectedChip({
-                                          locationIndex: locIndex,
-                                          chipIndex: idx,
-                                        });
-                                        setExpandedLocation(locIndex);
-                                      }
-                                    }}
-                                  >
-                                    {chip.label}
-                                    <span className="ml-1 opacity-60">
-                                      ({chip.reviewIndices.length})
-                                    </span>
-                                  </Badge>
-                                );
-                              })}
-                            </div>
+                        <div className="flex items-center gap-2">
+                          <ThumbsUp className="w-3.5 h-3.5 text-green-600 shrink-0" />
+                          <div className="flex flex-wrap gap-2">
+                            {positiveChips.map((chip, chipIndex) => {
+                              const actualIndex = loc.chips.indexOf(chip);
+                              return (
+                                <Badge
+                                  key={chipIndex}
+                                  variant="outline"
+                                  className={`cursor-pointer transition-all bg-green-500/10 text-green-700 border-green-500/30 hover:bg-green-500/20 ${
+                                    selectedChip?.locationIndex === locIndex &&
+                                    selectedChip?.chipIndex === actualIndex
+                                      ? "ring-2 ring-offset-1 ring-green-500"
+                                      : ""
+                                  }`}
+                                  onClick={() => {
+                                    const idx = loc.chips.indexOf(chip);
+                                    if (
+                                      selectedChip?.locationIndex ===
+                                        locIndex &&
+                                      selectedChip?.chipIndex === idx
+                                    ) {
+                                      setSelectedChip(null);
+                                    } else {
+                                      setSelectedChip({
+                                        locationIndex: locIndex,
+                                        chipIndex: idx,
+                                      });
+                                      setExpandedLocation(locIndex);
+                                    }
+                                  }}
+                                >
+                                  {chip.label}
+                                  <span className="ml-1 opacity-60">
+                                    ({chip.reviewIndices.length})
+                                  </span>
+                                </Badge>
+                              );
+                            })}
                           </div>
-                        )}
-                        {loc.monthlyReviews && (
-                          <MonthlyReviewRow
-                            data={loc.monthlyReviews}
-                            type="positive"
-                          />
-                        )}
+                        </div>
                       </div>
                     )}
 
-                    {/* Negative section: chips + monthly counts */}
-                    {(negativeChips.length > 0 || loc.monthlyReviews) && (
+                    {/* Negative chips */}
+                    {negativeChips.length > 0 && (
                       <div
-                        className="mt-3 space-y-1"
+                        className="mt-3"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {negativeChips.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            <ThumbsDown className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                            <div className="flex flex-wrap gap-2">
-                              {negativeChips.map((chip, chipIndex) => {
-                                const actualIndex = loc.chips.indexOf(chip);
-                                return (
-                                  <Badge
-                                    key={chipIndex}
-                                    variant="outline"
-                                    className={`cursor-pointer transition-all bg-red-500/10 text-red-700 border-red-500/30 hover:bg-red-500/20 ${
-                                      selectedChip?.locationIndex === locIndex &&
-                                      selectedChip?.chipIndex === actualIndex
-                                        ? "ring-2 ring-offset-1 ring-red-500"
-                                        : ""
-                                    }`}
-                                    onClick={() => {
-                                      const idx = loc.chips.indexOf(chip);
-                                      if (
-                                        selectedChip?.locationIndex ===
-                                          locIndex &&
-                                        selectedChip?.chipIndex === idx
-                                      ) {
-                                        setSelectedChip(null);
-                                      } else {
-                                        setSelectedChip({
-                                          locationIndex: locIndex,
-                                          chipIndex: idx,
-                                        });
-                                        setExpandedLocation(locIndex);
-                                      }
-                                    }}
-                                  >
-                                    {chip.label}
-                                    <span className="ml-1 opacity-60">
-                                      ({chip.reviewIndices.length})
-                                    </span>
-                                  </Badge>
-                                );
-                              })}
-                            </div>
+                        <div className="flex items-center gap-2">
+                          <ThumbsDown className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                          <div className="flex flex-wrap gap-2">
+                            {negativeChips.map((chip, chipIndex) => {
+                              const actualIndex = loc.chips.indexOf(chip);
+                              return (
+                                <Badge
+                                  key={chipIndex}
+                                  variant="outline"
+                                  className={`cursor-pointer transition-all bg-red-500/10 text-red-700 border-red-500/30 hover:bg-red-500/20 ${
+                                    selectedChip?.locationIndex === locIndex &&
+                                    selectedChip?.chipIndex === actualIndex
+                                      ? "ring-2 ring-offset-1 ring-red-500"
+                                      : ""
+                                  }`}
+                                  onClick={() => {
+                                    const idx = loc.chips.indexOf(chip);
+                                    if (
+                                      selectedChip?.locationIndex ===
+                                        locIndex &&
+                                      selectedChip?.chipIndex === idx
+                                    ) {
+                                      setSelectedChip(null);
+                                    } else {
+                                      setSelectedChip({
+                                        locationIndex: locIndex,
+                                        chipIndex: idx,
+                                      });
+                                      setExpandedLocation(locIndex);
+                                    }
+                                  }}
+                                >
+                                  {chip.label}
+                                  <span className="ml-1 opacity-60">
+                                    ({chip.reviewIndices.length})
+                                  </span>
+                                </Badge>
+                              );
+                            })}
                           </div>
-                        )}
-                        {loc.monthlyReviews && (
-                          <MonthlyReviewRow
-                            data={loc.monthlyReviews}
-                            type="negative"
-                          />
-                        )}
+                        </div>
                       </div>
                     )}
                   </CardHeader>
