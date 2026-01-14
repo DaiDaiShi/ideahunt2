@@ -30,7 +30,6 @@ export interface StoredResult {
       rating: number;
       reviewer: string;
       date: string;
-      relevanceReason?: string;
     }>;
   }>;
   createdAt: string;

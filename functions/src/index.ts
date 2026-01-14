@@ -185,7 +185,7 @@ interface LocationAnalysis {
   matchScore: number; // 0-100 score for ranking
   summary: string;
   chips: Chip[];
-  reviews: Array<Review & { relevanceReason?: string }>;
+  reviews: Review[];
   monthlyReviews: MonthlyReviewCount[];
 }
 
@@ -326,38 +326,54 @@ export const analyzeReviews = functions
             )
             .join("\n\n");
 
-          const systemPrompt = `You are an assistant that analyzes customer reviews for a specific location. Analyze how well this place matches the user's preferences and identify any red flags.
+          const systemPrompt = `You are a strict review analyst. Your job is to determine how well a location matches specific user criteria by analyzing reviews.
 
-Be concise and specific. Extract short 1-3 word tags that summarize key themes from the reviews.`;
+CRITICAL RULES:
+1. Only associate a review with an aspect if the review EXPLICITLY and DIRECTLY discusses that specific topic
+2. A review mentioning "good food" is NOT relevant to "parking" or "service" - be strict about this
+3. Generic positive/negative reviews without specific details should NOT be associated with specific aspects
+4. When in doubt, do NOT include the review - false positives are worse than missing data
+5. Each chip must have at least one genuinely relevant review, otherwise don't create that chip`;
 
           const userPrompt = `Location: ${place.placeName}
 
-User's preferences (what they care about): ${criteria}
-${redFlags ? `Red flags to avoid: ${redFlags}` : ""}
+USER'S CRITERIA (what they specifically care about): ${criteria}
+${redFlags ? `DEAL-BREAKERS (red flags to watch for): ${redFlags}` : ""}
 
-Reviews:
+REVIEWS TO ANALYZE:
 ${reviewsText}
 
-Analyze these reviews and respond with JSON:
+TASK: Analyze these reviews against the user's specific criteria.
+
+SCORING GUIDELINES:
+- Start at 50 (neutral)
+- For EACH user criterion that has positive evidence in reviews: +10 to +15 points
+- For EACH user criterion with negative evidence: -10 to -15 points
+- For EACH deal-breaker found in reviews: -15 to -20 points
+- No evidence for a criterion: no change (don't assume positive or negative)
+- Cap the final score between 0-100
+
+Respond with this exact JSON structure:
 {
-  "matchScore": <0-100 number indicating how well this place matches the user's preferences, considering both positive matches and red flags>,
-  "summary": "<2-3 sentences summarizing how this location matches the user's needs, mentioning specific pros and cons>",
+  "matchScore": <calculated score 0-100>,
+  "scoringBreakdown": "<brief explanation: 'Started at 50. +X for [criterion] (evidence found). -Y for [red flag]. Final: Z'>",
+  "summary": "<2-3 sentences about how this place matches the user's specific needs>",
   "chips": [
     {
-      "label": "<1-3 word tag like 'great food', 'noisy', 'friendly staff', 'slow service'>",
-      "type": "<'positive' if matches user preferences, 'negative' if matches red flags or is a concern>",
-      "reviewIndices": [<array of 0-based review indices that support this tag>]
-    }
-  ],
-  "relevantReviews": [
-    {
-      "index": <0-based index of the review>,
-      "relevanceReason": "<brief reason why this review is relevant>"
+      "label": "<short 1-3 word aspect label>",
+      "type": "positive" | "negative",
+      "reviewIndices": [<ONLY indices where the review EXPLICITLY discusses this exact topic>]
     }
   ]
 }
 
-Generate 3-8 chips that capture the main themes. Only include reviews that are actually relevant.`;
+CHIP RULES:
+- Only create chips for aspects the USER asked about (their criteria or red flags)
+- A review index should ONLY appear in a chip if that review contains explicit text about that specific aspect
+- Example: If user asked about "cleanliness" - only include reviews that specifically mention clean/dirty/hygiene
+- Do NOT include reviews just because they're positive/negative in general
+- Maximum 6 chips, minimum 2 if evidence exists
+- If a chip would have 0 relevant reviews, do NOT include it`;
 
           const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
@@ -376,30 +392,27 @@ Generate 3-8 chips that capture the main themes. Only include reviews that are a
 
           const result = JSON.parse(content);
 
-          // Map relevant reviews with their reasons
-          const relevantReviewsMap = new Map<number, string>();
-          if (result.relevantReviews) {
-            for (const rr of result.relevantReviews) {
-              relevantReviewsMap.set(rr.index, rr.relevanceReason);
-            }
-          }
+          // Filter chips to ensure they have valid review indices
+          const validChips = (result.chips || []).filter(
+            (chip: Chip) => chip.reviewIndices && chip.reviewIndices.length > 0
+          );
 
-          // Build the reviews array with relevance reasons
-          const reviewsWithReasons = place.reviews.map((r, i) => ({
-            ...r,
-            relevanceReason: relevantReviewsMap.get(i),
-          }));
+          // Build summary with scoring breakdown if available
+          const fullSummary = result.scoringBreakdown
+            ? `${result.summary}`
+            : result.summary || "";
 
-          const chips = result.chips || [];
           locationAnalyses.push({
             url: place.url,
             placeName: place.placeName,
-            matchScore: result.matchScore || 0,
-            summary: result.summary || "",
-            chips,
-            reviews: reviewsWithReasons,
-            monthlyReviews: computeMonthlyReviewsFromChips(place.reviews, chips),
+            matchScore: Math.max(0, Math.min(100, result.matchScore || 50)),
+            summary: fullSummary,
+            chips: validChips,
+            reviews: place.reviews,
+            monthlyReviews: computeMonthlyReviewsFromChips(place.reviews, validChips),
           });
+
+          console.log(`${place.placeName}: Score ${result.matchScore}, Breakdown: ${result.scoringBreakdown}`);
         }
 
         // Sort by matchScore descending (best matches first)

@@ -32,7 +32,6 @@ interface Review {
   rating: number;
   reviewer: string;
   date: string;
-  relevanceReason?: string;
 }
 
 interface Chip {
@@ -217,9 +216,19 @@ const Results = () => {
         return chip.reviewIndices.map((i) => loc.reviews[i]).filter(Boolean);
       }
     }
-    // Show reviews with relevance reasons, or all if none have reasons
-    const relevant = loc.reviews.filter((r) => r.relevanceReason);
-    return relevant.length > 0 ? relevant : loc.reviews.slice(0, 5);
+    // When no chip selected, show reviews that appear in at least one chip (most relevant)
+    const chipReviewIndices = new Set<number>();
+    loc.chips.forEach((chip) => {
+      chip.reviewIndices.forEach((i) => chipReviewIndices.add(i));
+    });
+    if (chipReviewIndices.size > 0) {
+      return Array.from(chipReviewIndices)
+        .slice(0, 5)
+        .map((i) => loc.reviews[i])
+        .filter(Boolean);
+    }
+    // Fallback to first few reviews
+    return loc.reviews.slice(0, 5);
   };
 
   return (
@@ -491,12 +500,6 @@ const Results = () => {
                               <p className="text-sm text-foreground leading-relaxed">
                                 {review.text}
                               </p>
-                              {review.relevanceReason && (
-                                <p className="mt-2 text-xs text-primary flex items-start gap-1">
-                                  <Sparkles className="w-3 h-3 mt-0.5 shrink-0" />
-                                  {review.relevanceReason}
-                                </p>
-                              )}
                             </div>
                           ))}
                         </div>
