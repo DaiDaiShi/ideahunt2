@@ -9,7 +9,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2, FileText } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2, FileText, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -240,8 +248,54 @@ const Analyze = () => {
                 <MapPin className="w-5 h-5" />
                 Google Maps Links
               </CardTitle>
-              <CardDescription>
-                Add up to 5 places you want to compare ({links.length}/5)
+              <CardDescription className="flex items-center justify-between">
+                <span>Add up to 5 places you want to compare ({links.length}/5)</span>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button className="text-primary hover:underline text-xs flex items-center gap-1">
+                      <HelpCircle className="w-3 h-3" />
+                      How to find links?
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>How to Get Google Maps Links</DialogTitle>
+                      <DialogDescription>
+                        Follow these simple steps to copy a location link
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-2">
+                      <div className="space-y-3">
+                        <div className="flex gap-3">
+                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">1</div>
+                          <div>
+                            <p className="font-medium">Search for a place</p>
+                            <p className="text-sm text-muted-foreground">Open Google Maps and search for the business or location you want to analyze</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-3">
+                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">2</div>
+                          <div>
+                            <p className="font-medium">Select the place</p>
+                            <p className="text-sm text-muted-foreground">Click on the specific location from the search results to open its details panel</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-3">
+                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">3</div>
+                          <div>
+                            <p className="font-medium">Copy the link</p>
+                            <p className="text-sm text-muted-foreground">Click the <strong>Share</strong> button, then click <strong>Copy link</strong>. You can also copy the URL directly from your browser's address bar.</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-muted/50 rounded-lg p-3 text-sm">
+                        <p className="font-medium mb-1">Example links:</p>
+                        <p className="text-muted-foreground text-xs break-all">https://maps.app.goo.gl/ABC123...</p>
+                        <p className="text-muted-foreground text-xs break-all">https://www.google.com/maps/place/...</p>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
