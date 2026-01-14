@@ -174,8 +174,8 @@ interface Chip {
 // Monthly review counts for past 12 months
 interface MonthlyReviewCount {
   month: string; // "Jan", "Feb", etc.
-  positiveCount: number; // 4-5 star reviews
-  negativeCount: number; // 1-2 star reviews
+  positiveCount: number; // reviews matching positive chips
+  negativeCount: number; // reviews matching negative chips
 }
 
 // Analysis result for a single location
@@ -189,38 +189,77 @@ interface LocationAnalysis {
   monthlyReviews: MonthlyReviewCount[];
 }
 
-// Helper to compute monthly positive/negative review counts for past 12 months
-function computeMonthlyReviews(reviews: Review[]): MonthlyReviewCount[] {
+// Helper to compute monthly review counts based on chip associations
+function computeMonthlyReviewsFromChips(
+  reviews: Review[],
+  chips: Chip[]
+): MonthlyReviewCount[] {
   const now = new Date();
-  const result: MonthlyReviewCount[] = [];
 
-  // Generate past 12 months (most recent first)
+  // Collect unique review indices for positive and negative chips
+  const positiveReviewIndices = new Set<number>();
+  const negativeReviewIndices = new Set<number>();
+
+  for (const chip of chips) {
+    if (chip.type === "positive") {
+      chip.reviewIndices.forEach((i) => positiveReviewIndices.add(i));
+    } else {
+      chip.reviewIndices.forEach((i) => negativeReviewIndices.add(i));
+    }
+  }
+
+  // Initialize month counts map
+  const monthCounts = new Map<string, { positive: number; negative: number }>();
+  const monthKeys: string[] = [];
+  const monthNames: string[] = [];
+
+  // Generate past 12 months (oldest first)
   for (let i = 11; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthKey = `${d.getFullYear()}-${d.getMonth()}`;
-    const monthName = d.toLocaleDateString("en-US", { month: "short" });
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    monthKeys.push(key);
+    monthNames.push(d.toLocaleDateString("en-US", { month: "short" }));
+    monthCounts.set(key, { positive: 0, negative: 0 });
+  }
 
-    let positiveCount = 0;
-    let negativeCount = 0;
-
-    for (const review of reviews) {
+  // Count unique positive reviews by month
+  for (const idx of positiveReviewIndices) {
+    const review = reviews[idx];
+    if (review) {
       const reviewDate = new Date(review.date);
       if (!isNaN(reviewDate.getTime())) {
-        const reviewMonthKey = `${reviewDate.getFullYear()}-${reviewDate.getMonth()}`;
-        if (reviewMonthKey === monthKey) {
-          if (review.rating >= 4) {
-            positiveCount++;
-          } else if (review.rating <= 2) {
-            negativeCount++;
-          }
+        const key = `${reviewDate.getFullYear()}-${reviewDate.getMonth()}`;
+        const counts = monthCounts.get(key);
+        if (counts) {
+          counts.positive++;
         }
       }
     }
+  }
 
+  // Count unique negative reviews by month
+  for (const idx of negativeReviewIndices) {
+    const review = reviews[idx];
+    if (review) {
+      const reviewDate = new Date(review.date);
+      if (!isNaN(reviewDate.getTime())) {
+        const key = `${reviewDate.getFullYear()}-${reviewDate.getMonth()}`;
+        const counts = monthCounts.get(key);
+        if (counts) {
+          counts.negative++;
+        }
+      }
+    }
+  }
+
+  // Build result array
+  const result: MonthlyReviewCount[] = [];
+  for (let i = 0; i < monthKeys.length; i++) {
+    const counts = monthCounts.get(monthKeys[i])!;
     result.push({
-      month: monthName,
-      positiveCount,
-      negativeCount,
+      month: monthNames[i],
+      positiveCount: counts.positive,
+      negativeCount: counts.negative,
     });
   }
 
@@ -274,7 +313,7 @@ export const analyzeReviews = functions
               summary: "No reviews with text available for this location.",
               chips: [],
               reviews: [],
-              monthlyReviews: computeMonthlyReviews([]),
+              monthlyReviews: computeMonthlyReviewsFromChips([], []),
             });
             continue;
           }
@@ -351,14 +390,15 @@ Generate 3-8 chips that capture the main themes. Only include reviews that are a
             relevanceReason: relevantReviewsMap.get(i),
           }));
 
+          const chips = result.chips || [];
           locationAnalyses.push({
             url: place.url,
             placeName: place.placeName,
             matchScore: result.matchScore || 0,
             summary: result.summary || "",
-            chips: result.chips || [],
+            chips,
             reviews: reviewsWithReasons,
-            monthlyReviews: computeMonthlyReviews(place.reviews),
+            monthlyReviews: computeMonthlyReviewsFromChips(place.reviews, chips),
           });
         }
 

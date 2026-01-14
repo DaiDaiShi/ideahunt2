@@ -65,12 +65,16 @@ const MonthlyReviewRow = ({
   data: MonthlyReviewCount[];
   type: "positive" | "negative";
 }) => {
-  const bgColor = type === "positive" ? "bg-green-500" : "bg-red-500";
+  const bgColor = type === "positive" ? "bg-green-500/10" : "bg-red-500/10";
+  const textColor = type === "positive" ? "text-green-700" : "text-red-700";
   const iconColor = type === "positive" ? "text-green-600" : "text-red-600";
 
   return (
-    <div className="flex items-center gap-1 mt-2">
-      <Calendar className={`w-3.5 h-3.5 ${iconColor} shrink-0`} />
+    <div className="flex items-start gap-3 mt-2">
+      <div className="flex flex-col items-center shrink-0" title="Reviews from the past 12 months">
+        <Calendar className={`w-3.5 h-3.5 ${iconColor}`} />
+        <span className="text-[8px] text-muted-foreground">1yr</span>
+      </div>
       <div className="flex gap-0.5">
         {data.map((month, i) => {
           const count =
@@ -83,7 +87,7 @@ const MonthlyReviewRow = ({
             >
               <div
                 className={`w-6 h-5 rounded-sm flex items-center justify-center text-xs font-medium ${
-                  count > 0 ? `${bgColor} text-white` : "bg-muted text-muted-foreground"
+                  count > 0 ? `${bgColor} ${textColor}` : "bg-muted text-muted-foreground"
                 }`}
               >
                 {count > 0 ? count : ""}
