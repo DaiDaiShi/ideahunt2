@@ -69,11 +69,13 @@ const Results = () => {
   const [isLoading, setIsLoading] = useState(!!urlResultId);
   const [isCopied, setIsCopied] = useState(false);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [title, setTitle] = useState("");
   const [criteria, setCriteria] = useState("");
   const [redFlags, setRedFlags] = useState("");
 
   const state = location.state as {
     analysis: AnalysisResult;
+    title: string;
     criteria: string;
     redFlags: string;
   } | null;
@@ -88,6 +90,7 @@ const Results = () => {
           const storedResult = await getResult(urlResultId);
           if (storedResult) {
             setAnalysis({ locations: storedResult.locations });
+            setTitle(storedResult.title);
             setCriteria(storedResult.criteria);
             setRedFlags(storedResult.redFlags);
             setResultId(urlResultId);
@@ -108,12 +111,14 @@ const Results = () => {
       // If we have state from analysis, save it and update URL
       if (state?.analysis && user) {
         setAnalysis(state.analysis);
+        setTitle(state.title || "Untitled Analysis");
         setCriteria(state.criteria);
         setRedFlags(state.redFlags || "");
 
         try {
           const newResultId = await saveResult(
             user.id,
+            state.title || "Untitled Analysis",
             state.criteria,
             state.redFlags || "",
             state.analysis.locations
@@ -252,12 +257,12 @@ const Results = () => {
           {/* Results Header */}
           <div className="mb-6 flex items-start justify-between">
             <div>
-              <h1 className="font-display text-2xl font-bold mb-2">
-                {analysis.locations.length} Location
-                {analysis.locations.length !== 1 ? "s" : ""} Analyzed
+              <h1 className="font-display text-2xl font-bold mb-1">
+                {title}
               </h1>
               <p className="text-muted-foreground">
-                Ranked by how well they match your preferences
+                {analysis.locations.length} location
+                {analysis.locations.length !== 1 ? "s" : ""} analyzed · Ranked by match score
               </p>
             </div>
             {resultId && (

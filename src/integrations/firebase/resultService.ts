@@ -4,16 +4,15 @@ import {
   setDoc,
   collection,
   query,
-  where,
   orderBy,
   getDocs,
-  Timestamp,
 } from "firebase/firestore";
 import { db } from "./config";
 
 export interface StoredResult {
   id: string;
   userId: string;
+  title: string;
   criteria: string;
   redFlags: string;
   locations: Array<{
@@ -39,7 +38,7 @@ export interface StoredResult {
 
 export interface UserResultRef {
   resultId: string;
-  criteria: string;
+  title: string;
   locationCount: number;
   createdAt: string;
 }
@@ -57,6 +56,7 @@ const generateResultId = (): string => {
 // Save a new result
 export const saveResult = async (
   userId: string,
+  title: string,
   criteria: string,
   redFlags: string,
   locations: StoredResult["locations"]
@@ -66,6 +66,7 @@ export const saveResult = async (
 
   const resultData = {
     userId,
+    title,
     criteria,
     redFlags,
     locations,
@@ -78,7 +79,7 @@ export const saveResult = async (
   // Save reference to user's results subcollection
   const userResultRef: UserResultRef = {
     resultId,
-    criteria,
+    title,
     locationCount: locations.length,
     createdAt: now,
   };
@@ -97,6 +98,7 @@ export const getResult = async (resultId: string): Promise<StoredResult | null> 
     return {
       id: docSnap.id,
       userId: data.userId,
+      title: data.title || "Untitled Analysis",
       criteria: data.criteria,
       redFlags: data.redFlags || "",
       locations: data.locations,
@@ -118,7 +120,7 @@ export const getUserResults = async (userId: string): Promise<UserResultRef[]> =
     const data = doc.data();
     return {
       resultId: data.resultId,
-      criteria: data.criteria,
+      title: data.title || "Untitled Analysis",
       locationCount: data.locationCount,
       createdAt: data.createdAt,
     };

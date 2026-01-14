@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2 } from "lucide-react";
+import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -44,6 +44,7 @@ const Analyze = () => {
   const navigate = useNavigate();
 
   const [links, setLinks] = useState<string[]>([""]);
+  const [title, setTitle] = useState("");
   const [locationType, setLocationType] = useState("");
   const [criteria, setCriteria] = useState("");
   const [redFlags, setRedFlags] = useState("");
@@ -183,7 +184,7 @@ const Analyze = () => {
       }
 
       // Navigate to results with data
-      navigate("/results", { state: { analysis, criteria, redFlags } });
+      navigate("/results", { state: { analysis, title: title.trim() || "Untitled Analysis", criteria, redFlags } });
     } catch (error: any) {
       console.error("Analysis error:", error);
       toast.error(error.message || "Analysis failed. Please try again.");
@@ -212,6 +213,26 @@ const Analyze = () => {
               Add Google Maps links and tell us what you're looking for
             </p>
           </div>
+
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Analysis Title
+              </CardTitle>
+              <CardDescription>
+                Give this analysis a name so you can find it later
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Input
+                placeholder="e.g., Best Italian restaurants in SF, Dentists near downtown..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                disabled={isAnalyzing}
+              />
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
