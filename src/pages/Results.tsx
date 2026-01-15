@@ -480,8 +480,8 @@ const Results = () => {
                             <MapPin className="w-4 h-4" />
                             {selectedChip !== null &&
                             selectedChip.locationIndex === locIndex
-                              ? `Reviews mentioning "${loc.chips[selectedChip.chipIndex]?.label}"`
-                              : "Relevant Reviews"}
+                              ? `Reviews mentioning "${loc.chips[selectedChip.chipIndex]?.label}" (${filteredReviews.length})`
+                              : `Relevant Reviews (${filteredReviews.length})`}
                           </h4>
 
                           {filteredReviews.map((review, reviewIndex) => (
