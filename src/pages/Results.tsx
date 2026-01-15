@@ -212,25 +212,15 @@ const Results = () => {
   };
 
   const getFilteredReviews = (locationIndex: number, loc: LocationAnalysis) => {
+    // If a chip is selected, show only reviews for that chip
     if (selectedChip?.locationIndex === locationIndex) {
       const chip = loc.chips[selectedChip.chipIndex];
       if (chip) {
         return chip.reviewIndices.map((i) => loc.reviews[i]).filter(Boolean);
       }
     }
-    // When no chip selected, show reviews that appear in at least one chip (most relevant)
-    const chipReviewIndices = new Set<number>();
-    loc.chips.forEach((chip) => {
-      chip.reviewIndices.forEach((i) => chipReviewIndices.add(i));
-    });
-    if (chipReviewIndices.size > 0) {
-      return Array.from(chipReviewIndices)
-        .slice(0, 5)
-        .map((i) => loc.reviews[i])
-        .filter(Boolean);
-    }
-    // Fallback to first few reviews
-    return loc.reviews.slice(0, 5);
+    // By default, show all reviews
+    return loc.reviews;
   };
 
   return (
@@ -481,7 +471,7 @@ const Results = () => {
                             {selectedChip !== null &&
                             selectedChip.locationIndex === locIndex
                               ? `Reviews mentioning "${loc.chips[selectedChip.chipIndex]?.label}" (${filteredReviews.length})`
-                              : `Relevant Reviews (${filteredReviews.length})`}
+                              : `All Reviews (${filteredReviews.length})`}
                           </h4>
 
                           {filteredReviews.map((review, reviewIndex) => (
