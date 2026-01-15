@@ -27,11 +27,17 @@ import {
 import { toast } from "sonner";
 import { saveResult, getResult } from "@/integrations/firebase/resultService";
 
+interface Aspect {
+  label: string;
+  sentiment: "positive" | "negative";
+}
+
 interface Review {
   text: string;
   rating: number;
   reviewer: string;
   date: string;
+  aspects?: Aspect[];
 }
 
 interface Chip {
@@ -499,6 +505,23 @@ const Results = () => {
                               <p className="text-sm text-foreground leading-relaxed">
                                 {review.text}
                               </p>
+                              {review.aspects && review.aspects.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t">
+                                  {review.aspects.map((aspect, aspectIndex) => (
+                                    <Badge
+                                      key={aspectIndex}
+                                      variant="outline"
+                                      className={`text-xs ${
+                                        aspect.sentiment === "positive"
+                                          ? "bg-green-500/10 text-green-700 border-green-500/30"
+                                          : "bg-red-500/10 text-red-700 border-red-500/30"
+                                      }`}
+                                    >
+                                      {aspect.label}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>

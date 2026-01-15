@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import axios from "axios";
-import OpenAI from "openai";
+import Groq from "groq-sdk";
 
 admin.initializeApp();
 
@@ -14,19 +14,25 @@ const getApifyKey = (): string => {
   return key;
 };
 
-const getOpenAIKey = (): string => {
-  const key = process.env.OPENAI_API_KEY || functions.config().openai?.api_key;
+const getGroqKey = (): string => {
+  const key = process.env.GROQ_API_KEY || functions.config().groq?.api_key;
   if (!key) {
-    throw new Error("OpenAI API key not configured");
+    throw new Error("Groq API key not configured");
   }
   return key;
 };
+
+interface Aspect {
+  label: string;
+  sentiment: "positive" | "negative";
+}
 
 interface Review {
   text: string;
   rating: number;
   reviewer: string;
   date: string;
+  aspects?: Aspect[];
 }
 
 interface PlaceReviews {
@@ -302,15 +308,8 @@ export const analyzeReviews = functions
         );
       }
 
-      if (!criteria) {
-        throw new functions.https.HttpsError(
-          "invalid-argument",
-          "Criteria is required"
-        );
-      }
-
       try {
-        const openai = new OpenAI({ apiKey: getOpenAIKey() });
+        const groq = new Groq({ apiKey: getGroqKey() });
         const locationAnalyses: LocationAnalysis[] = [];
 
         // Analyze each location separately
@@ -341,62 +340,59 @@ export const analyzeReviews = functions
 
           const systemPrompt = `You are an expert at Aspect-Based Sentiment Analysis (ABSA). Your job is to:
 1. Extract specific aspects mentioned in each review along with their sentiment
-2. Match those aspects against user criteria to determine fit
+2. Rank the extracted aspects by relevance to user's criteria
 
 ABSA RULES:
-- An aspect is a specific feature/attribute explicitly discussed (e.g., "food quality", "wait time", "staff attitude")
-- Sentiment is positive, negative, or neutral for that specific aspect
+- An aspect is a specific feature/attribute explicitly discussed (e.g., "food", "service", "price", "cleanliness")
+- Sentiment is positive or negative for that specific aspect
 - Example: "The pizza was amazing but the waiter was rude"
-  → Aspect: Food, Sentiment: Positive
-  → Aspect: Service, Sentiment: Negative
-- Generic statements like "great place" or "bad experience" have NO extractable aspects - skip them
-- Each aspect must be explicitly mentioned, not inferred`;
+  → Aspects: [{label: "food", sentiment: "positive"}, {label: "service", sentiment: "negative"}]
+- Generic statements like "great place" or "bad experience" have NO extractable aspects - return empty array
+- Each aspect must be explicitly mentioned in the text, not inferred
+- Keep aspect labels short (1-2 words) and normalized (e.g., "food" not "food quality", "service" not "customer service")`;
 
           const userPrompt = `Location: ${place.placeName}
 
-USER'S PREFERRED ASPECTS: ${criteria}
-${redFlags ? `USER'S DEAL-BREAKERS: ${redFlags}` : ""}
+USER CARES ABOUT: ${criteria || "not specified"}
+USER WANTS TO AVOID: ${redFlags || "not specified"}
 
 REVIEWS:
 ${reviewsText}
 
-TASK: Perform Aspect-Based Sentiment Analysis, then match against user criteria.
+TASK:
+1. Extract aspects and sentiments from EACH review using ABSA
+2. Aggregate all unique aspects found across reviews
+3. Rank the aggregated aspects by relevance to what the user cares about (most relevant first)
 
-PHASE 1 - ABSA (do this internally, don't output):
-For each review, extract:
-- What specific aspects are mentioned? (food, service, price, cleanliness, atmosphere, wait time, etc.)
+For each review, identify:
+- What specific aspects are mentioned? (food, service, price, cleanliness, atmosphere, wait time, parking, staff, etc.)
 - What is the sentiment for each aspect? (positive/negative)
-- If a review has no specific aspects (just generic praise/complaint), mark it as "no aspects"
-
-PHASE 2 - MATCHING:
-Compare extracted aspects against user's preferred aspects and deal-breakers:
-- Does any extracted aspect match a user criterion? Record the review index.
-- Does any extracted aspect match a user deal-breaker? Record the review index.
-
-SCORING:
-- Start at 50 (neutral)
-- For each user criterion with matching positive-sentiment aspects: +10 to +15
-- For each user criterion with matching negative-sentiment aspects: -10 to -15
-- For each deal-breaker found with negative sentiment: -15 to -20
-- No matching aspects found: no change
-- Cap between 0-100
+- If a review has no specific aspects (just generic praise/complaint), return empty array
 
 OUTPUT FORMAT (JSON only):
 {
-  "matchScore": <number 0-100>,
-  "scoringBreakdown": "Started at 50. [adjustments based on matched aspects]. Final: X",
-  "summary": "<2-3 sentences about fit based on extracted aspects>",
-  "chips": [
+  "reviewAspects": [
     {
-      "label": "<aspect name matching user criteria>",
-      "type": "positive" | "negative",
-      "reviewIndices": [<indices where this EXACT aspect was explicitly discussed>]
+      "reviewIndex": 1,
+      "aspects": [
+        {"label": "food", "sentiment": "positive"},
+        {"label": "service", "sentiment": "negative"}
+      ]
     }
-  ]
-}`;
+  ],
+  "rankedPositiveAspects": ["most relevant positive aspect", "second most relevant", ...],
+  "rankedNegativeAspects": ["most relevant negative aspect", "second most relevant", ...],
+  "summary": "<2-3 sentences summarizing how this place matches user's criteria>"
+}
 
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+RANKING RULES:
+- rankedPositiveAspects: List all positive aspects found, ordered by relevance to USER CARES ABOUT (most relevant first)
+- rankedNegativeAspects: List all negative aspects found, ordered by relevance to USER WANTS TO AVOID (most relevant first)
+- Aspects that directly match user criteria should be ranked higher
+- Aspects not mentioned in user criteria should be ranked lower`;
+
+          const completion = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt },
@@ -407,34 +403,103 @@ OUTPUT FORMAT (JSON only):
 
           const content = completion.choices[0]?.message?.content;
           if (!content) {
-            throw new Error("No response from OpenAI");
+            throw new Error("No response from Groq");
           }
 
           const result = JSON.parse(content);
 
-          // Filter chips to ensure they have valid review indices
-          const validChips = (result.chips || []).filter(
-            (chip: Chip) => chip.reviewIndices && chip.reviewIndices.length > 0
-          );
+          // Attach aspects to each review
+          const reviewsWithAspects: Review[] = place.reviews.map((review, index) => {
+            const reviewAspect = (result.reviewAspects || []).find(
+              (ra: { reviewIndex: number }) => ra.reviewIndex === index + 1
+            );
+            return {
+              ...review,
+              aspects: reviewAspect?.aspects || [],
+            };
+          });
 
-          // Build summary with scoring breakdown if available
-          const fullSummary = result.scoringBreakdown
-            ? `${result.summary}`
-            : result.summary || "";
+          // Generate chips by aggregating aspects across reviews
+          const aspectMap = new Map<string, { type: "positive" | "negative"; reviewIndices: number[] }>();
+
+          reviewsWithAspects.forEach((review, reviewIndex) => {
+            (review.aspects || []).forEach((aspect: Aspect) => {
+              const key = `${aspect.label.toLowerCase()}-${aspect.sentiment}`;
+              if (!aspectMap.has(key)) {
+                aspectMap.set(key, {
+                  type: aspect.sentiment,
+                  reviewIndices: [],
+                });
+              }
+              aspectMap.get(key)!.reviewIndices.push(reviewIndex);
+            });
+          });
+
+          // Get ranked aspects from AI response
+          const rankedPositive: string[] = result.rankedPositiveAspects || [];
+          const rankedNegative: string[] = result.rankedNegativeAspects || [];
+
+          // Build chips in ranked order (positive first, then negative)
+          const chips: Chip[] = [];
+
+          // Add positive chips in ranked order
+          for (const aspectLabel of rankedPositive) {
+            const key = `${aspectLabel.toLowerCase()}-positive`;
+            const data = aspectMap.get(key);
+            if (data && data.reviewIndices.length > 0) {
+              chips.push({
+                label: aspectLabel,
+                type: "positive",
+                reviewIndices: data.reviewIndices,
+              });
+            }
+          }
+
+          // Add negative chips in ranked order
+          for (const aspectLabel of rankedNegative) {
+            const key = `${aspectLabel.toLowerCase()}-negative`;
+            const data = aspectMap.get(key);
+            if (data && data.reviewIndices.length > 0) {
+              chips.push({
+                label: aspectLabel,
+                type: "negative",
+                reviewIndices: data.reviewIndices,
+              });
+            }
+          }
+
+          // Add any remaining aspects not in ranked lists (fallback)
+          for (const [key, value] of aspectMap.entries()) {
+            const label = key.split("-")[0];
+            const alreadyAdded = chips.some(c => c.label.toLowerCase() === label && c.type === value.type);
+            if (!alreadyAdded && value.reviewIndices.length > 0) {
+              chips.push({
+                label,
+                type: value.type,
+                reviewIndices: value.reviewIndices,
+              });
+            }
+          }
+
+          // Calculate match score based on positive vs negative aspects
+          const positiveCount = chips.filter(c => c.type === "positive").reduce((sum, c) => sum + c.reviewIndices.length, 0);
+          const negativeCount = chips.filter(c => c.type === "negative").reduce((sum, c) => sum + c.reviewIndices.length, 0);
+          const total = positiveCount + negativeCount;
+          const matchScore = total > 0 ? Math.round((positiveCount / total) * 100) : 50;
 
           locationAnalyses.push({
             url: place.url,
             placeName: place.placeName,
             totalScore: place.totalScore,
             reviewsCount: place.reviewsCount,
-            matchScore: Math.max(0, Math.min(100, result.matchScore || 50)),
-            summary: fullSummary,
-            chips: validChips,
-            reviews: place.reviews,
-            monthlyReviews: computeMonthlyReviewsFromChips(place.reviews, validChips),
+            matchScore,
+            summary: result.summary || "",
+            chips,
+            reviews: reviewsWithAspects,
+            monthlyReviews: computeMonthlyReviewsFromChips(reviewsWithAspects, chips),
           });
 
-          console.log(`${place.placeName}: Score ${result.matchScore}, Breakdown: ${result.scoringBreakdown}`);
+          console.log(`${place.placeName}: Extracted ${chips.length} aspect types, Score: ${matchScore}`);
         }
 
         // Sort by matchScore descending (best matches first)
@@ -476,7 +541,7 @@ export const generateAspects = functions
     }
 
     try {
-      const openai = new OpenAI({ apiKey: getOpenAIKey() });
+      const groq = new Groq({ apiKey: getGroqKey() });
 
       const prompt = `For "${locationType}", generate two lists:
 1. 10 common positive aspects that customers typically look for and appreciate
@@ -490,8 +555,8 @@ Respond with JSON:
   "negativeAspects": ["aspect1", "aspect2", ...]
 }`;
 
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+      const completion = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
         messages: [
           {
             role: "system",
@@ -505,7 +570,7 @@ Respond with JSON:
 
       const content = completion.choices[0]?.message?.content;
       if (!content) {
-        throw new Error("No response from OpenAI");
+        throw new Error("No response from Groq");
       }
 
       const result = JSON.parse(content);

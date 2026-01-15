@@ -32,6 +32,10 @@ export interface StoredResult {
       rating: number;
       reviewer: string;
       date: string;
+      aspects?: Array<{
+        label: string;
+        sentiment: "positive" | "negative";
+      }>;
     }>;
   }>;
   createdAt: string;
