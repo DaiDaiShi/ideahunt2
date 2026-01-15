@@ -61,6 +61,8 @@ const Analyze = () => {
   const [isGeneratingAspects, setIsGeneratingAspects] = useState(false);
   const [suggestedPositive, setSuggestedPositive] = useState<string[]>([]);
   const [suggestedNegative, setSuggestedNegative] = useState<string[]>([]);
+  const [selectedPositive, setSelectedPositive] = useState<string[]>([]);
+  const [selectedNegative, setSelectedNegative] = useState<string[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -114,23 +116,33 @@ const Analyze = () => {
   };
 
   const addToCriteria = (aspect: string) => {
-    const current = criteria.trim();
-    if (current.toLowerCase().includes(aspect.toLowerCase())) {
+    if (selectedPositive.includes(aspect)) {
       return; // Already included
     }
-    setCriteria(current ? `${current}, ${aspect}` : aspect);
+    setSelectedPositive([...selectedPositive, aspect]);
     // Remove from suggested list
     setSuggestedPositive(suggestedPositive.filter((a) => a !== aspect));
   };
 
+  const removeFromCriteria = (aspect: string) => {
+    setSelectedPositive(selectedPositive.filter((a) => a !== aspect));
+    // Add back to suggested list
+    setSuggestedPositive([...suggestedPositive, aspect]);
+  };
+
   const addToRedFlags = (aspect: string) => {
-    const current = redFlags.trim();
-    if (current.toLowerCase().includes(aspect.toLowerCase())) {
+    if (selectedNegative.includes(aspect)) {
       return; // Already included
     }
-    setRedFlags(current ? `${current}, ${aspect}` : aspect);
+    setSelectedNegative([...selectedNegative, aspect]);
     // Remove from suggested list
     setSuggestedNegative(suggestedNegative.filter((a) => a !== aspect));
+  };
+
+  const removeFromRedFlags = (aspect: string) => {
+    setSelectedNegative(selectedNegative.filter((a) => a !== aspect));
+    // Add back to suggested list
+    setSuggestedNegative([...suggestedNegative, aspect]);
   };
 
   const handleAnalyze = async () => {
@@ -148,7 +160,11 @@ const Analyze = () => {
       return;
     }
 
-    if (!criteria.trim()) {
+    // Combine selected chips with textarea input
+    const allCriteria = [...selectedPositive, criteria.trim()].filter(Boolean).join(", ");
+    const allRedFlags = [...selectedNegative, redFlags.trim()].filter(Boolean).join(", ");
+
+    if (!allCriteria) {
       toast.error("Please describe what you care about in reviews");
       return;
     }
@@ -179,8 +195,8 @@ const Analyze = () => {
 
       const analysisResult = await analyzeReviews({
         reviews: reviewsData.reviews,
-        criteria: criteria.trim(),
-        redFlags: redFlags.trim(),
+        criteria: allCriteria,
+        redFlags: allRedFlags,
       });
 
       const analysis = analysisResult.data as AnalysisResult;
@@ -192,7 +208,7 @@ const Analyze = () => {
       }
 
       // Navigate to results with data
-      navigate("/results", { state: { analysis, title: title.trim() || "Untitled Analysis", criteria, redFlags } });
+      navigate("/results", { state: { analysis, title: title.trim() || "Untitled Analysis", criteria: allCriteria, redFlags: allRedFlags } });
     } catch (error: any) {
       console.error("Analysis error:", error);
       toast.error(error.message || "Analysis failed. Please try again.");
@@ -437,13 +453,28 @@ const Analyze = () => {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="criteria">Aspects you care about most *</Label>
+                {selectedPositive.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {selectedPositive.map((aspect, i) => (
+                      <Badge
+                        key={i}
+                        variant="outline"
+                        className="cursor-pointer bg-green-500/10 text-green-700 border-green-500/30 hover:bg-green-500/20 pr-1"
+                        onClick={() => removeFromCriteria(aspect)}
+                      >
+                        {aspect}
+                        <X className="w-3 h-3 ml-1" />
+                      </Badge>
+                    ))}
+                  </div>
+                )}
                 <Textarea
                   id="criteria"
-                  placeholder="e.g., authentic food, good service, clean environment, reasonable prices..."
+                  placeholder={selectedPositive.length > 0 ? "Add more criteria..." : "e.g., authentic food, good service, clean environment, reasonable prices..."}
                   value={criteria}
                   onChange={(e) => setCriteria(e.target.value)}
                   disabled={isAnalyzing}
-                  rows={3}
+                  rows={2}
                 />
               </div>
 
@@ -452,9 +483,24 @@ const Analyze = () => {
                   <AlertTriangle className="w-4 h-4 text-destructive" />
                   Deal-breakers to watch for (optional)
                 </Label>
+                {selectedNegative.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {selectedNegative.map((aspect, i) => (
+                      <Badge
+                        key={i}
+                        variant="outline"
+                        className="cursor-pointer bg-red-500/10 text-red-700 border-red-500/30 hover:bg-red-500/20 pr-1"
+                        onClick={() => removeFromRedFlags(aspect)}
+                      >
+                        {aspect}
+                        <X className="w-3 h-3 ml-1" />
+                      </Badge>
+                    ))}
+                  </div>
+                )}
                 <Textarea
                   id="redFlags"
-                  placeholder="e.g., food poisoning, rude staff, long wait times, hidden fees..."
+                  placeholder={selectedNegative.length > 0 ? "Add more deal-breakers..." : "e.g., food poisoning, rude staff, long wait times, hidden fees..."}
                   value={redFlags}
                   onChange={(e) => setRedFlags(e.target.value)}
                   disabled={isAnalyzing}
