@@ -339,54 +339,61 @@ export const analyzeReviews = functions
             )
             .join("\n\n");
 
-          const systemPrompt = `You are a strict review analyst. Your job is to determine how well a location matches specific user criteria by analyzing reviews.
+          const systemPrompt = `You are an expert at Aspect-Based Sentiment Analysis (ABSA). Your job is to:
+1. Extract specific aspects mentioned in each review along with their sentiment
+2. Match those aspects against user criteria to determine fit
 
-CRITICAL RULES:
-1. Only associate a review with an aspect if the review EXPLICITLY and DIRECTLY discusses that specific topic
-2. A review mentioning "good food" is NOT relevant to "parking" or "service" - be strict about this
-3. Generic positive/negative reviews without specific details should NOT be associated with specific aspects
-4. When in doubt, do NOT include the review - false positives are worse than missing data
-5. Each chip must have at least one genuinely relevant review, otherwise don't create that chip`;
+ABSA RULES:
+- An aspect is a specific feature/attribute explicitly discussed (e.g., "food quality", "wait time", "staff attitude")
+- Sentiment is positive, negative, or neutral for that specific aspect
+- Example: "The pizza was amazing but the waiter was rude"
+  → Aspect: Food, Sentiment: Positive
+  → Aspect: Service, Sentiment: Negative
+- Generic statements like "great place" or "bad experience" have NO extractable aspects - skip them
+- Each aspect must be explicitly mentioned, not inferred`;
 
           const userPrompt = `Location: ${place.placeName}
 
-USER'S CRITERIA (what they specifically care about): ${criteria}
-${redFlags ? `DEAL-BREAKERS (red flags to watch for): ${redFlags}` : ""}
+USER'S PREFERRED ASPECTS: ${criteria}
+${redFlags ? `USER'S DEAL-BREAKERS: ${redFlags}` : ""}
 
-REVIEWS TO ANALYZE:
+REVIEWS:
 ${reviewsText}
 
-TASK: Analyze these reviews against the user's specific criteria.
+TASK: Perform Aspect-Based Sentiment Analysis, then match against user criteria.
 
-SCORING GUIDELINES:
+PHASE 1 - ABSA (do this internally, don't output):
+For each review, extract:
+- What specific aspects are mentioned? (food, service, price, cleanliness, atmosphere, wait time, etc.)
+- What is the sentiment for each aspect? (positive/negative)
+- If a review has no specific aspects (just generic praise/complaint), mark it as "no aspects"
+
+PHASE 2 - MATCHING:
+Compare extracted aspects against user's preferred aspects and deal-breakers:
+- Does any extracted aspect match a user criterion? Record the review index.
+- Does any extracted aspect match a user deal-breaker? Record the review index.
+
+SCORING:
 - Start at 50 (neutral)
-- For EACH user criterion that has positive evidence in reviews: +10 to +15 points
-- For EACH user criterion with negative evidence: -10 to -15 points
-- For EACH deal-breaker found in reviews: -15 to -20 points
-- No evidence for a criterion: no change (don't assume positive or negative)
-- Cap the final score between 0-100
+- For each user criterion with matching positive-sentiment aspects: +10 to +15
+- For each user criterion with matching negative-sentiment aspects: -10 to -15
+- For each deal-breaker found with negative sentiment: -15 to -20
+- No matching aspects found: no change
+- Cap between 0-100
 
-Respond with this exact JSON structure:
+OUTPUT FORMAT (JSON only):
 {
-  "matchScore": <calculated score 0-100>,
-  "scoringBreakdown": "<brief explanation: 'Started at 50. +X for [criterion] (evidence found). -Y for [red flag]. Final: Z'>",
-  "summary": "<2-3 sentences about how this place matches the user's specific needs>",
+  "matchScore": <number 0-100>,
+  "scoringBreakdown": "Started at 50. [adjustments based on matched aspects]. Final: X",
+  "summary": "<2-3 sentences about fit based on extracted aspects>",
   "chips": [
     {
-      "label": "<short 1-3 word aspect label>",
+      "label": "<aspect name matching user criteria>",
       "type": "positive" | "negative",
-      "reviewIndices": [<ONLY indices where the review EXPLICITLY discusses this exact topic>]
+      "reviewIndices": [<indices where this EXACT aspect was explicitly discussed>]
     }
   ]
-}
-
-CHIP RULES:
-- Only create chips for aspects the USER asked about (their criteria or red flags)
-- A review index should ONLY appear in a chip if that review contains explicit text about that specific aspect
-- Example: If user asked about "cleanliness" - only include reviews that specifically mention clean/dirty/hygiene
-- Do NOT include reviews just because they're positive/negative in general
-- Maximum 6 chips, minimum 2 if evidence exists
-- If a chip would have 0 relevant reviews, do NOT include it`;
+}`;
 
           const completion = await openai.chat.completions.create({
             model: "gpt-4o-mini",
