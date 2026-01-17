@@ -17,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2, FileText, HelpCircle, ExternalLink, Navigation } from "lucide-react";
+import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2, FileText, HelpCircle, ExternalLink, Navigation, Check } from "lucide-react";
 import { toast } from "sonner";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -89,6 +89,9 @@ const Analyze = () => {
   const removeLink = (index: number) => {
     if (links.length > 1) {
       setLinks(links.filter((_, i) => i !== index));
+    } else {
+      // If it's the only link, just clear it
+      setLinks([""]);
     }
   };
 
@@ -180,7 +183,15 @@ const Analyze = () => {
     }
   };
 
+  const isLocationAdded = (location: ResolvedLocation) => {
+    return links.some((link) => link === location.mapsUrl);
+  };
+
   const addResolvedLocationToLinks = (location: ResolvedLocation) => {
+    // Check if already added
+    if (isLocationAdded(location)) {
+      return;
+    }
     // Find the first empty slot or add a new one
     const emptyIndex = links.findIndex((link) => !link.trim());
     if (emptyIndex !== -1) {
@@ -193,8 +204,6 @@ const Analyze = () => {
       toast.error("Maximum 5 links allowed. Remove one to add more.");
       return;
     }
-    // Remove from resolved locations
-    setResolvedLocations(resolvedLocations.filter((loc) => loc.mapsUrl !== location.mapsUrl));
     toast.success(`Added ${location.name}`);
   };
 
@@ -311,99 +320,14 @@ const Analyze = () => {
             </CardContent>
           </Card>
 
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Navigation className="w-5 h-5" />
-                Find Locations
-              </CardTitle>
-              <CardDescription>
-                Describe the places you're looking for and we'll find them for you
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="e.g., best ramen in Sunnyvale, affordable apartments near Stanford..."
-                  value={locationQuery}
-                  onChange={(e) => setLocationQuery(e.target.value)}
-                  disabled={isAnalyzing || isResolvingLocations}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleResolveLocations();
-                    }
-                  }}
-                />
-                <Button
-                  variant="outline"
-                  onClick={handleResolveLocations}
-                  disabled={isAnalyzing || isResolvingLocations || !locationQuery.trim()}
-                >
-                  {isResolvingLocations ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Search className="w-4 h-4 mr-2" />
-                      Search
-                    </>
-                  )}
-                </Button>
-              </div>
-
-              {resolvedLocations.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    Click + to add to your comparison list
-                  </p>
-                  <div className="space-y-2">
-                    {resolvedLocations.map((location, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
-                      >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary"
-                          onClick={() => addResolvedLocationToLinks(location)}
-                          disabled={links.length >= 5 && !links.some((l) => !l.trim())}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium truncate">{location.name}</span>
-                            <Badge variant="outline" className="text-xs flex-shrink-0">
-                              {Math.round(location.confidence_score * 100)}% match
-                            </Badge>
-                          </div>
-                          <a
-                            href={location.mapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 truncate"
-                          >
-                            {location.address}
-                            <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                          </a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="w-5 h-5" />
-                Google Maps Links
+                Locations to Compare
               </CardTitle>
               <CardDescription className="flex items-center justify-between">
-                <span>Add up to 5 places you want to compare ({links.length}/5)</span>
+                <span>Add up to 5 places using search or direct links ({links.filter(l => l.trim()).length}/5 added)</span>
                 <Dialog>
                   <DialogTrigger asChild>
                     <button className="text-primary hover:underline text-xs flex items-center gap-1">
@@ -452,41 +376,149 @@ const Analyze = () => {
                 </Dialog>
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {links.map((link, index) => (
-                <div key={index} className="flex gap-2">
-                  <Input
-                    placeholder="https://maps.app.goo.gl/..."
-                    value={link}
-                    onChange={(e) => updateLink(index, e.target.value)}
-                    disabled={isAnalyzing}
-                    className={link && !isValidGoogleMapsLink(link) ? "border-destructive" : ""}
-                  />
-                  {links.length > 1 && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeLink(index)}
+            <CardContent className="space-y-6">
+              {/* Added Locations List */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-600" />
+                  Your locations
+                </Label>
+                {links.map((link, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input
+                      placeholder="https://maps.app.goo.gl/..."
+                      value={link}
+                      onChange={(e) => updateLink(index, e.target.value)}
                       disabled={isAnalyzing}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  )}
-                </div>
-              ))}
+                      className={link && !isValidGoogleMapsLink(link) ? "border-destructive" : ""}
+                    />
+                    {(links.length > 1 || link.trim()) && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeLink(index)}
+                        disabled={isAnalyzing}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
 
-              {links.length < 5 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={addLink}
-                  disabled={isAnalyzing}
-                  className="w-full"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Another Link
-                </Button>
-              )}
+                {links.length < 5 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={addLink}
+                    disabled={isAnalyzing}
+                    className="w-full"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Another Link
+                  </Button>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="flex items-center gap-4">
+                <div className="flex-1 h-px bg-border"></div>
+                <span className="text-xs text-muted-foreground">or search to find locations</span>
+                <div className="flex-1 h-px bg-border"></div>
+              </div>
+
+              {/* Search Section */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Navigation className="w-4 h-4" />
+                  Find locations by description
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g., best ramen in Sunnyvale, affordable apartments near Stanford..."
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    disabled={isAnalyzing || isResolvingLocations}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleResolveLocations();
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={handleResolveLocations}
+                    disabled={isAnalyzing || isResolvingLocations || !locationQuery.trim()}
+                  >
+                    {isResolvingLocations ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Search className="w-4 h-4 mr-2" />
+                        Search
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {resolvedLocations.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <p className="text-xs text-muted-foreground">
+                      Click + to add to your list above
+                    </p>
+                    <div className="space-y-2">
+                      {resolvedLocations.map((location, i) => {
+                        const added = isLocationAdded(location);
+                        return (
+                          <div
+                            key={i}
+                            className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                              added ? "bg-green-500/10 border-green-500/30" : "bg-muted/30 hover:bg-muted/50"
+                            }`}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`flex-shrink-0 h-8 w-8 rounded-full ${
+                                added
+                                  ? "bg-green-500/20 text-green-600 cursor-default"
+                                  : "bg-primary/10 hover:bg-primary/20 text-primary"
+                              }`}
+                              onClick={() => !added && addResolvedLocationToLinks(location)}
+                              disabled={added || (links.length >= 5 && !links.some((l) => !l.trim()))}
+                            >
+                              {added ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                            </Button>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium truncate">{location.name}</span>
+                                <Badge variant="outline" className="text-xs flex-shrink-0">
+                                  {Math.round(location.confidence_score * 100)}% match
+                                </Badge>
+                                {added && (
+                                  <Badge variant="outline" className="text-xs flex-shrink-0 bg-green-500/10 text-green-600 border-green-500/30">
+                                    Added
+                                  </Badge>
+                                )}
+                              </div>
+                              <a
+                                href={location.mapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 truncate"
+                              >
+                                {location.address}
+                                <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
