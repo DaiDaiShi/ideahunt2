@@ -519,6 +519,115 @@ RANKING RULES:
     }
   );
 
+// Resolve user location description to real-world places
+interface ResolvedLocation {
+  name: string;
+  address: string;
+  confidence_score: number;
+  mapsUrl: string;
+}
+
+export const resolveLocations = functions
+  .runWith({ timeoutSeconds: 30, memory: "256MB" })
+  .https.onCall(async (data: { query: string }, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "User must be authenticated"
+      );
+    }
+
+    const { query } = data;
+
+    if (!query || query.trim().length === 0) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Query is required"
+      );
+    }
+
+    try {
+      const groq = new Groq({ apiKey: getGroqKey() });
+
+      const systemPrompt = `You are a location resolution assistant that maps user descriptions to real-world places.
+
+Task: Given a user's description of a location or places, identify the top relevant real-world locations and return them in a minimal structured format.
+
+Input Interpretation:
+The user description may be:
+- A specific place or address (e.g., "Grocery Outlet, Sunnyvale, CA")
+- A discovery-based query (e.g., "recommended affordable apartments in Sunnyvale, CA")
+Infer intent automatically.
+
+Output Rules:
+- Return up to 5 locations
+- Prefer the most relevant, well-known, and correctly located places
+- Use full formatted addresses
+- Assign a confidence score between 0.0 and 1.0:
+  - 0.90–1.00 → Exact name or address match
+  - 0.75–0.89 → Very strong inferred match
+  - 0.60–0.74 → Good but weaker relevance
+  - < 0.60 → Marginal relevance (include only if needed)
+- Do not include ratings, review counts, URLs, explanations, or extra fields
+- Output only the structured JSON`;
+
+      const userPrompt = `Find real-world locations for: "${query}"
+
+Output Format (STRICT JSON):
+{
+  "query": "<original user query>",
+  "locations": [
+    {
+      "name": "",
+      "address": "",
+      "confidence_score": 0.0
+    }
+  ]
+}`;
+
+      const completion = await groq.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+      });
+
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("No response from Groq");
+      }
+
+      const result = JSON.parse(content);
+
+      // Generate Google Maps URLs for each location
+      const locations: ResolvedLocation[] = (result.locations || []).map(
+        (loc: { name: string; address: string; confidence_score: number }) => {
+          const searchQuery = `${loc.name}, ${loc.address}`;
+          const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchQuery)}`;
+          return {
+            name: loc.name,
+            address: loc.address,
+            confidence_score: loc.confidence_score,
+            mapsUrl,
+          };
+        }
+      );
+
+      console.log(`Resolved ${locations.length} locations for query: "${query}"`);
+
+      return { query: result.query, locations };
+    } catch (error: any) {
+      console.error("Error resolving locations:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        `Failed to resolve locations: ${error.message}`
+      );
+    }
+  });
+
 // Generate common aspects for a location type
 export const generateAspects = functions
   .runWith({ timeoutSeconds: 30, memory: "256MB" })

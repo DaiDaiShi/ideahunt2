@@ -17,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2, FileText, HelpCircle } from "lucide-react";
+import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2, FileText, HelpCircle, ExternalLink, Navigation } from "lucide-react";
 import { toast } from "sonner";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -47,6 +47,13 @@ interface AnalysisResult {
   }>;
 }
 
+interface ResolvedLocation {
+  name: string;
+  address: string;
+  confidence_score: number;
+  mapsUrl: string;
+}
+
 const Analyze = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -63,6 +70,9 @@ const Analyze = () => {
   const [suggestedNegative, setSuggestedNegative] = useState<string[]>([]);
   const [selectedPositive, setSelectedPositive] = useState<string[]>([]);
   const [selectedNegative, setSelectedNegative] = useState<string[]>([]);
+  const [locationQuery, setLocationQuery] = useState("");
+  const [isResolvingLocations, setIsResolvingLocations] = useState(false);
+  const [resolvedLocations, setResolvedLocations] = useState<ResolvedLocation[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -143,6 +153,49 @@ const Analyze = () => {
     setSelectedNegative(selectedNegative.filter((a) => a !== aspect));
     // Add back to suggested list
     setSuggestedNegative([...suggestedNegative, aspect]);
+  };
+
+  const handleResolveLocations = async () => {
+    if (!locationQuery.trim()) {
+      toast.error("Please describe the locations you're looking for");
+      return;
+    }
+
+    setIsResolvingLocations(true);
+    setResolvedLocations([]);
+    try {
+      const functions = getFunctions();
+      const resolveLocations = httpsCallable(functions, "resolveLocations");
+      const result = await resolveLocations({ query: locationQuery.trim() });
+      const data = result.data as { query: string; locations: ResolvedLocation[] };
+      setResolvedLocations(data.locations || []);
+      if (data.locations.length === 0) {
+        toast.info("No locations found. Try a more specific query.");
+      }
+    } catch (error: any) {
+      console.error("Error resolving locations:", error);
+      toast.error("Failed to find locations. Please try again.");
+    } finally {
+      setIsResolvingLocations(false);
+    }
+  };
+
+  const addResolvedLocationToLinks = (location: ResolvedLocation) => {
+    // Find the first empty slot or add a new one
+    const emptyIndex = links.findIndex((link) => !link.trim());
+    if (emptyIndex !== -1) {
+      const newLinks = [...links];
+      newLinks[emptyIndex] = location.mapsUrl;
+      setLinks(newLinks);
+    } else if (links.length < 5) {
+      setLinks([...links, location.mapsUrl]);
+    } else {
+      toast.error("Maximum 5 links allowed. Remove one to add more.");
+      return;
+    }
+    // Remove from resolved locations
+    setResolvedLocations(resolvedLocations.filter((loc) => loc.mapsUrl !== location.mapsUrl));
+    toast.success(`Added ${location.name}`);
   };
 
   const handleAnalyze = async () => {
@@ -255,6 +308,91 @@ const Analyze = () => {
                 onChange={(e) => setTitle(e.target.value)}
                 disabled={isAnalyzing}
               />
+            </CardContent>
+          </Card>
+
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Navigation className="w-5 h-5" />
+                Find Locations
+              </CardTitle>
+              <CardDescription>
+                Describe the places you're looking for and we'll find them for you
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="e.g., best ramen in Sunnyvale, affordable apartments near Stanford..."
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  disabled={isAnalyzing || isResolvingLocations}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleResolveLocations();
+                    }
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleResolveLocations}
+                  disabled={isAnalyzing || isResolvingLocations || !locationQuery.trim()}
+                >
+                  {isResolvingLocations ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Search className="w-4 h-4 mr-2" />
+                      Search
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {resolvedLocations.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Click + to add to your comparison list
+                  </p>
+                  <div className="space-y-2">
+                    {resolvedLocations.map((location, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
+                      >
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="flex-shrink-0 h-8 w-8 rounded-full bg-primary/10 hover:bg-primary/20 text-primary"
+                          onClick={() => addResolvedLocationToLinks(location)}
+                          disabled={links.length >= 5 && !links.some((l) => !l.trim())}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium truncate">{location.name}</span>
+                            <Badge variant="outline" className="text-xs flex-shrink-0">
+                              {Math.round(location.confidence_score * 100)}% match
+                            </Badge>
+                          </div>
+                          <a
+                            href={location.mapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 truncate"
+                          >
+                            {location.address}
+                            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
