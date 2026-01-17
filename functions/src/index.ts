@@ -551,27 +551,42 @@ export const resolveLocations = functions
 
       const systemPrompt = `You are a location resolution assistant that finds specific businesses and establishments.
 
+STEP 1 - INTENT VALIDATION:
+First, determine if the query is a valid search for visitable places. Return EMPTY locations array if:
+- Query is just a person's name (e.g., "Lebron James", "Taylor Swift")
+- Query is a generic object/food without location context (e.g., "Bananas", "iPhone")
+- Query is ONLY a city/region name without business type (e.g., "Sunnyvale", "California")
+- Query is nonsensical or unrelated to finding places
+
+Valid queries must include EITHER:
+- A specific business name (e.g., "Starbucks in Palo Alto")
+- A business TYPE + location (e.g., "ramen restaurants in SF", "apartments near Stanford")
+
+STEP 2 - LOCATION RESOLUTION (only if valid):
 CRITICAL RULES:
 1. NEVER return cities, neighborhoods, regions, or geographic areas as results
-2. ALWAYS return specific businesses, establishments, properties, or named places that can be visited
-3. When user mentions multiple cities (e.g., "in Sunnyvale and Mountain View"), find specific places WITHIN those cities
+2. ALWAYS return specific businesses, establishments, properties, or named places
+3. When user mentions multiple cities, find specific places WITHIN each city
 4. Return real, well-known establishments that match the user's intent
 
 Examples:
-- "luxury apartments in Sunnyvale" → Return specific apartment complexes like "Avalon Sunnyvale", "The Meadows Apartments", etc.
+- "luxury apartments in Sunnyvale" → Return specific apartment complexes like "Avalon Sunnyvale", "The Meadows Apartments"
 - "best ramen in SF and Oakland" → Return specific restaurants in each city
 - "Grocery Outlet, Sunnyvale" → Return the specific Grocery Outlet store with full address
+- "Sunnyvale" → Return EMPTY (just a city, no business intent)
+- "Lebron James" → Return EMPTY (person, not a place)
+- "bananas" → Return EMPTY (object, not a place search)
 
 Output Rules:
 - Return up to 5 specific establishments (NEVER cities or regions)
-- Use the actual business/property name
-- Include full street address
-- Confidence score 0.0-1.0 based on match quality
-- Output only structured JSON`;
+- Return EMPTY array if query is invalid
+- Use actual business/property name with full street address
+- Confidence score 0.0-1.0 based on match quality`;
 
-      const userPrompt = `Find specific businesses/establishments for: "${query}"
+      const userPrompt = `Analyze this query: "${query}"
 
-Remember: Return SPECIFIC places (restaurants, apartments, stores, etc.), NOT cities or geographic areas.
+1. Is this a valid search for specific places/businesses? If NO, return empty locations.
+2. If YES, find specific establishments (NOT cities or regions).
 
 Output Format (STRICT JSON):
 {
@@ -583,7 +598,9 @@ Output Format (STRICT JSON):
       "confidence_score": 0.0
     }
   ]
-}`;
+}
+
+Return empty locations [] if the query is not a valid place search.`;
 
       const completion = await groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
