@@ -73,11 +73,10 @@ export const fetchReviews = functions
 
     try {
       const apifyApiKey = getApifyKey();
-      const allPlaceReviews: PlaceReviews[] = [];
 
-      // Use Apify Google Maps Reviews Scraper
-      for (const url of urls) {
-        if (!url.trim()) continue;
+      // Helper function to fetch reviews for a single URL
+      const fetchSingleUrl = async (url: string): Promise<PlaceReviews | null> => {
+        if (!url.trim()) return null;
 
         const runInput = {
           startUrls: [{ url }],
@@ -89,83 +88,96 @@ export const fetchReviews = functions
           scrapeResponseFromOwner: false,
         };
 
-        // Start the actor run
-        const response = await axios.post(
-          `https://api.apify.com/v2/acts/compass~google-maps-reviews-scraper/runs?token=${apifyApiKey}`,
-          runInput,
-          {
-            headers: { "Content-Type": "application/json" },
-          }
-        );
-
-        const runId = response.data.data.id;
-
-        // Wait for the run to complete (poll with timeout)
-        let dataset = null;
-        const maxAttempts = 30;
-        for (let i = 0; i < maxAttempts; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-
-          const statusResponse = await axios.get(
-            `https://api.apify.com/v2/actor-runs/${runId}?token=${apifyApiKey}`
+        try {
+          // Start the actor run
+          const response = await axios.post(
+            `https://api.apify.com/v2/acts/compass~google-maps-reviews-scraper/runs?token=${apifyApiKey}`,
+            runInput,
+            {
+              headers: { "Content-Type": "application/json" },
+            }
           );
 
-          if (statusResponse.data.data.status === "SUCCEEDED") {
-            const datasetId = statusResponse.data.data.defaultDatasetId;
-            const datasetResponse = await axios.get(
-              `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apifyApiKey}`
+          const runId = response.data.data.id;
+          console.log(`Started Apify run ${runId} for: ${url}`);
+
+          // Wait for the run to complete (poll with timeout)
+          let dataset = null;
+          const maxAttempts = 30;
+          for (let i = 0; i < maxAttempts; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+
+            const statusResponse = await axios.get(
+              `https://api.apify.com/v2/actor-runs/${runId}?token=${apifyApiKey}`
             );
-            dataset = datasetResponse.data;
-            break;
-          } else if (
-            statusResponse.data.data.status === "FAILED" ||
-            statusResponse.data.data.status === "ABORTED"
-          ) {
-            console.error(`Apify run failed for URL: ${url}`);
-            break;
-          }
-        }
 
-        if (dataset && dataset.length > 0) {
-          let placeName = "Unknown Place";
-          let totalScore = 0;
-          let reviewsCount = 0;
-          const reviews: Review[] = [];
-
-          for (const item of dataset) {
-            // Check if this is place info (has title but no review text)
-            if (item.title && !item.text && !item.reviewText) {
-              placeName = item.title;
-              // Extract overall rating and total review count from place info
-              totalScore = item.totalScore || item.rating || item.averageRating || 0;
-              reviewsCount = item.reviewsCount || item.totalReviews || item.reviewCount || 0;
-            }
-
-            // Check if this is a review WITH text content (skip rating-only reviews)
-            const reviewText = item.text || item.reviewText || item.textTranslated || "";
-            if (reviewText && reviewText.trim().length > 0) {
-              reviews.push({
-                text: reviewText.trim(),
-                rating: item.stars || item.rating || item.reviewRating || 0,
-                reviewer: item.name || item.author || item.reviewerName || item.userName || "Anonymous",
-                date: item.publishedAtDate || item.time || item.reviewDate || item.date || "Unknown",
-              });
+            if (statusResponse.data.data.status === "SUCCEEDED") {
+              const datasetId = statusResponse.data.data.defaultDatasetId;
+              const datasetResponse = await axios.get(
+                `https://api.apify.com/v2/datasets/${datasetId}/items?token=${apifyApiKey}`
+              );
+              dataset = datasetResponse.data;
+              break;
+            } else if (
+              statusResponse.data.data.status === "FAILED" ||
+              statusResponse.data.data.status === "ABORTED"
+            ) {
+              console.error(`Apify run failed for URL: ${url}`);
+              return null;
             }
           }
 
-          console.log(`Found place: ${placeName}, rating: ${totalScore}, total reviews: ${reviewsCount}, analyzed: ${reviews.length}`);
+          if (dataset && dataset.length > 0) {
+            let placeName = "Unknown Place";
+            let totalScore = 0;
+            let reviewsCount = 0;
+            const reviews: Review[] = [];
 
-          allPlaceReviews.push({
-            url,
-            placeName,
-            totalScore,
-            reviewsCount,
-            reviews,
-          });
-        } else {
+            for (const item of dataset) {
+              // Check if this is place info (has title but no review text)
+              if (item.title && !item.text && !item.reviewText) {
+                placeName = item.title;
+                totalScore = item.totalScore || item.rating || item.averageRating || 0;
+                reviewsCount = item.reviewsCount || item.totalReviews || item.reviewCount || 0;
+              }
+
+              // Check if this is a review WITH text content
+              const reviewText = item.text || item.reviewText || item.textTranslated || "";
+              if (reviewText && reviewText.trim().length > 0) {
+                reviews.push({
+                  text: reviewText.trim(),
+                  rating: item.stars || item.rating || item.reviewRating || 0,
+                  reviewer: item.name || item.author || item.reviewerName || item.userName || "Anonymous",
+                  date: item.publishedAtDate || item.time || item.reviewDate || item.date || "Unknown",
+                });
+              }
+            }
+
+            console.log(`Found place: ${placeName}, rating: ${totalScore}, total reviews: ${reviewsCount}, analyzed: ${reviews.length}`);
+
+            return {
+              url,
+              placeName,
+              totalScore,
+              reviewsCount,
+              reviews,
+            };
+          }
+
           console.log("No dataset returned for URL:", url);
+          return null;
+        } catch (error) {
+          console.error(`Error fetching URL ${url}:`, error);
+          return null;
         }
-      }
+      };
+
+      // Fetch all URLs in parallel
+      console.log(`Fetching ${urls.length} URLs in parallel...`);
+      const results = await Promise.all(urls.map(fetchSingleUrl));
+
+      // Filter out null results
+      const allPlaceReviews = results.filter((r): r is PlaceReviews => r !== null);
 
       console.log(`Total places: ${allPlaceReviews.length}, Total reviews: ${allPlaceReviews.reduce((sum, p) => sum + p.reviews.length, 0)}`);
 
