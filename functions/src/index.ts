@@ -549,37 +549,37 @@ export const resolveLocations = functions
     try {
       const groq = new Groq({ apiKey: getGroqKey() });
 
-      const systemPrompt = `You are a location resolution assistant that maps user descriptions to real-world places.
+      const systemPrompt = `You are a location resolution assistant that finds specific businesses and establishments.
 
-Task: Given a user's description of a location or places, identify the top relevant real-world locations and return them in a minimal structured format.
+CRITICAL RULES:
+1. NEVER return cities, neighborhoods, regions, or geographic areas as results
+2. ALWAYS return specific businesses, establishments, properties, or named places that can be visited
+3. When user mentions multiple cities (e.g., "in Sunnyvale and Mountain View"), find specific places WITHIN those cities
+4. Return real, well-known establishments that match the user's intent
 
-Input Interpretation:
-The user description may be:
-- A specific place or address (e.g., "Grocery Outlet, Sunnyvale, CA")
-- A discovery-based query (e.g., "recommended affordable apartments in Sunnyvale, CA")
-Infer intent automatically.
+Examples:
+- "luxury apartments in Sunnyvale" → Return specific apartment complexes like "Avalon Sunnyvale", "The Meadows Apartments", etc.
+- "best ramen in SF and Oakland" → Return specific restaurants in each city
+- "Grocery Outlet, Sunnyvale" → Return the specific Grocery Outlet store with full address
 
 Output Rules:
-- Return up to 5 locations
-- Prefer the most relevant, well-known, and correctly located places
-- Use full formatted addresses
-- Assign a confidence score between 0.0 and 1.0:
-  - 0.90–1.00 → Exact name or address match
-  - 0.75–0.89 → Very strong inferred match
-  - 0.60–0.74 → Good but weaker relevance
-  - < 0.60 → Marginal relevance (include only if needed)
-- Do not include ratings, review counts, URLs, explanations, or extra fields
-- Output only the structured JSON`;
+- Return up to 5 specific establishments (NEVER cities or regions)
+- Use the actual business/property name
+- Include full street address
+- Confidence score 0.0-1.0 based on match quality
+- Output only structured JSON`;
 
-      const userPrompt = `Find real-world locations for: "${query}"
+      const userPrompt = `Find specific businesses/establishments for: "${query}"
+
+Remember: Return SPECIFIC places (restaurants, apartments, stores, etc.), NOT cities or geographic areas.
 
 Output Format (STRICT JSON):
 {
   "query": "<original user query>",
   "locations": [
     {
-      "name": "",
-      "address": "",
+      "name": "Business or Property Name",
+      "address": "Full street address with city and state",
       "confidence_score": 0.0
     }
   ]
