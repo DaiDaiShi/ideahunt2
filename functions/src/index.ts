@@ -22,6 +22,14 @@ const getGroqKey = (): string => {
   return key;
 };
 
+const getGoogleMapsKey = (): string => {
+  const key = process.env.GOOGLE_MAPS_API_KEY || functions.config().google?.maps_api_key;
+  if (!key) {
+    throw new Error("Google Maps API key not configured");
+  }
+  return key;
+};
+
 interface Aspect {
   label: string;
   sentiment: "positive" | "negative";
@@ -539,8 +547,53 @@ interface ResolvedLocation {
   mapsUrl: string;
 }
 
+interface LLMLocation {
+  name: string;
+  city: string;
+  state: string;
+  country: string;
+}
+
+// Verify location with Google Maps Places API and get exact URL
+async function verifyWithGoogleMaps(
+  loc: LLMLocation,
+  apiKey: string
+): Promise<ResolvedLocation | null> {
+  try {
+    const query = `${loc.name}, ${loc.city}, ${loc.state}, ${loc.country}`;
+    const url = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json`;
+    const params = new URLSearchParams({
+      input: query,
+      inputtype: "textquery",
+      fields: "place_id,formatted_address,name",
+      key: apiKey,
+    });
+
+    const response = await axios.get(`${url}?${params.toString()}`, {
+      timeout: 10000,
+    });
+
+    const data = response.data;
+    if (data.status !== "OK" || !data.candidates || data.candidates.length === 0) {
+      console.log(`No Google Maps match for: ${query}`);
+      return null;
+    }
+
+    const place = data.candidates[0];
+    return {
+      name: place.name,
+      address: place.formatted_address,
+      confidence_score: 0.95, // High confidence since verified by Google
+      mapsUrl: `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+    };
+  } catch (error) {
+    console.error(`Error verifying location ${loc.name}:`, error);
+    return null;
+  }
+}
+
 export const resolveLocations = functions
-  .runWith({ timeoutSeconds: 30, memory: "256MB" })
+  .runWith({ timeoutSeconds: 60, memory: "256MB" })
   .https.onCall(async (data: { query: string }, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -560,59 +613,46 @@ export const resolveLocations = functions
 
     try {
       const groq = new Groq({ apiKey: getGroqKey() });
+      const googleMapsKey = getGoogleMapsKey();
 
       const systemPrompt = `You are a location resolution assistant that finds specific businesses and establishments.
 
-STEP 1 - INTENT VALIDATION:
-First, determine if the query is a valid search for visitable places. Return EMPTY locations array if:
-- Query is just a person's name (e.g., "Lebron James", "Taylor Swift")
-- Query is a generic object/food without location context (e.g., "Bananas", "iPhone")
-- Query is ONLY a city/region name without business type (e.g., "Sunnyvale", "California")
-- Query is nonsensical or unrelated to finding places
+INTENT VALIDATION:
+Return EMPTY locations array if:
+- Query is a person's name (e.g., "Lebron James")
+- Query is a generic object without location (e.g., "Bananas")
+- Query is ONLY a city/region name without business type (e.g., "Sunnyvale")
+- Query is nonsensical
 
-Valid queries must include EITHER:
-- A specific business name (e.g., "Starbucks in Palo Alto")
-- A business TYPE + location (e.g., "ramen restaurants in SF", "apartments near Stanford")
+Valid queries must include:
+- A specific business name + location, OR
+- A business TYPE + location (e.g., "ramen in SF", "apartments near Stanford")
 
-STEP 2 - LOCATION RESOLUTION (only if valid):
-CRITICAL RULES:
-1. NEVER return cities, neighborhoods, regions, or geographic areas as results
-2. ALWAYS return specific businesses, establishments, properties, or named places
-3. When user mentions multiple cities, find specific places WITHIN each city
-4. Return real, well-known establishments that match the user's intent
+LOCATION RESOLUTION:
+- Return up to 5 specific businesses/establishments
+- NEVER return cities, neighborhoods, or regions as results
+- Return real, well-known places that match the user's intent
 
-Examples:
-- "luxury apartments in Sunnyvale" → Return specific apartment complexes like "Avalon Sunnyvale", "The Meadows Apartments"
-- "best ramen in SF and Oakland" → Return specific restaurants in each city
-- "Grocery Outlet, Sunnyvale" → Return the specific Grocery Outlet store with full address
-- "Sunnyvale" → Return EMPTY (just a city, no business intent)
-- "Lebron James" → Return EMPTY (person, not a place)
-- "bananas" → Return EMPTY (object, not a place search)
+Output only: name, city, state, country for each location.`;
 
-Output Rules:
-- Return up to 5 specific establishments (NEVER cities or regions)
-- Return EMPTY array if query is invalid
-- Use actual business/property name with full street address
-- Confidence score 0.0-1.0 based on match quality`;
+      const userPrompt = `Query: "${query}"
 
-      const userPrompt = `Analyze this query: "${query}"
-
-1. Is this a valid search for specific places/businesses? If NO, return empty locations.
-2. If YES, find specific establishments (NOT cities or regions).
+Return specific businesses/establishments (NOT cities).
 
 Output Format (STRICT JSON):
 {
-  "query": "<original user query>",
+  "query": "${query}",
   "locations": [
     {
-      "name": "Business or Property Name",
-      "address": "Full street address with city and state",
-      "confidence_score": 0.0
+      "name": "Business Name",
+      "city": "City",
+      "state": "State",
+      "country": "US"
     }
   ]
 }
 
-Return empty locations [] if the query is not a valid place search.`;
+Return empty locations [] if invalid query.`;
 
       const completion = await groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
@@ -630,22 +670,25 @@ Return empty locations [] if the query is not a valid place search.`;
       }
 
       const result = JSON.parse(content);
+      const llmLocations: LLMLocation[] = result.locations || [];
 
-      // Generate Google Maps URLs for each location
-      const locations: ResolvedLocation[] = (result.locations || []).map(
-        (loc: { name: string; address: string; confidence_score: number }) => {
-          const searchQuery = `${loc.name}, ${loc.address}`;
-          const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(searchQuery)}`;
-          return {
-            name: loc.name,
-            address: loc.address,
-            confidence_score: loc.confidence_score,
-            mapsUrl,
-          };
-        }
+      if (llmLocations.length === 0) {
+        return { query: result.query, locations: [] };
+      }
+
+      // Verify each location with Google Maps Places API in parallel
+      console.log(`Verifying ${llmLocations.length} locations with Google Maps...`);
+      const verificationPromises = llmLocations.map((loc) =>
+        verifyWithGoogleMaps(loc, googleMapsKey)
+      );
+      const verifiedResults = await Promise.all(verificationPromises);
+
+      // Filter out null results (unverified locations)
+      const locations = verifiedResults.filter(
+        (loc): loc is ResolvedLocation => loc !== null
       );
 
-      console.log(`Resolved ${locations.length} locations for query: "${query}"`);
+      console.log(`Verified ${locations.length}/${llmLocations.length} locations for: "${query}"`);
 
       return { query: result.query, locations };
     } catch (error: any) {
