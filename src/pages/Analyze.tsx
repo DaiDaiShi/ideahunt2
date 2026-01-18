@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/Header";
@@ -17,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2, FileText, HelpCircle, ExternalLink, Navigation, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, X, Search, Loader2, MapPin, AlertTriangle, Sparkles, ThumbsUp, ThumbsDown, Building2, FileText, HelpCircle, ExternalLink, Navigation, Check, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -54,18 +54,17 @@ interface ResolvedLocation {
   mapsUrl: string;
 }
 
-const STEPS = [
-  { number: 1, title: "Add Locations", description: "Choose places to compare" },
-  { number: 2, title: "Your Preferences", description: "Tell us what matters" },
-  { number: 3, title: "Review & Analyze", description: "Name and submit" },
-];
-
 const Analyze = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  // Step state
-  const [currentStep, setCurrentStep] = useState(1);
+  // Section visibility state
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [showSubmit, setShowSubmit] = useState(false);
+
+  // Refs for scrolling
+  const preferencesRef = useRef<HTMLDivElement>(null);
+  const submitRef = useRef<HTMLDivElement>(null);
 
   // Form state
   const [links, setLinks] = useState<string[]>([""]);
@@ -98,35 +97,37 @@ const Analyze = () => {
     return url.includes("google.com/maps") || url.includes("goo.gl/maps") || url.includes("maps.app.goo.gl");
   };
 
-  const canProceedStep1 = () => {
+  const canProceedToPreferences = () => {
     const validLinks = getValidLinks();
     return validLinks.length > 0 && validLinks.every(isValidGoogleMapsLink);
   };
 
-  const canProceedStep2 = () => {
+  const canProceedToSubmit = () => {
     const allCriteria = [...selectedPositive, criteria.trim()].filter(Boolean).join(", ");
     return allCriteria.length > 0;
   };
 
   // Navigation
-  const goToNextStep = () => {
-    if (currentStep === 1 && !canProceedStep1()) {
+  const showPreferencesSection = () => {
+    if (!canProceedToPreferences()) {
       toast.error("Please add at least one valid Google Maps link");
       return;
     }
-    if (currentStep === 2 && !canProceedStep2()) {
+    setShowPreferences(true);
+    setTimeout(() => {
+      preferencesRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
+  };
+
+  const showSubmitSection = () => {
+    if (!canProceedToSubmit()) {
       toast.error("Please tell us what you care about");
       return;
     }
-    if (currentStep < 3) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const goToPreviousStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
+    setShowSubmit(true);
+    setTimeout(() => {
+      submitRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 100);
   };
 
   // Link management
@@ -247,7 +248,6 @@ const Analyze = () => {
 
     if (validLinks.length === 0) {
       toast.error("Please add at least one Google Maps link");
-      setCurrentStep(1);
       return;
     }
 
@@ -256,7 +256,6 @@ const Analyze = () => {
 
     if (!allCriteria) {
       toast.error("Please describe what you care about in reviews");
-      setCurrentStep(2);
       return;
     }
 
@@ -317,48 +316,32 @@ const Analyze = () => {
       <Header />
       <main className="pt-24 pb-20">
         <div className="container mx-auto px-4 md:px-6 max-w-2xl">
-          {/* Step Indicator */}
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              {STEPS.map((step, index) => (
-                <div key={step.number} className="flex items-center">
-                  <div className="flex flex-col items-center">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
-                        currentStep === step.number
-                          ? "bg-primary text-primary-foreground"
-                          : currentStep > step.number
-                          ? "bg-green-500 text-white"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {currentStep > step.number ? <Check className="w-5 h-5" /> : step.number}
-                    </div>
-                    <div className="mt-2 text-center">
-                      <p className={`text-sm font-medium ${currentStep === step.number ? "text-primary" : "text-muted-foreground"}`}>
-                        {step.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground hidden sm:block">{step.description}</p>
-                    </div>
-                  </div>
-                  {index < STEPS.length - 1 && (
-                    <div className={`w-full h-0.5 mx-2 ${currentStep > step.number ? "bg-green-500" : "bg-muted"}`} style={{ minWidth: "40px" }} />
-                  )}
-                </div>
-              ))}
-            </div>
+          <div className="text-center mb-8">
+            <h1 className="font-display text-3xl font-bold mb-2">Compare Places</h1>
+            <p className="text-muted-foreground">
+              Add locations, tell us what matters, and get AI-powered insights
+            </p>
           </div>
 
-          {/* Step 1: Add Locations */}
-          {currentStep === 1 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5" />
-                  Which places do you want to compare?
-                </CardTitle>
-                <CardDescription className="flex items-center justify-between">
-                  <span>Add up to 5 locations ({getValidLinks().length}/5 added)</span>
+          {/* Section 1: Add Locations */}
+          <Card className="mb-6">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">1</div>
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPin className="w-5 h-5" />
+                    Which places do you want to compare?
+                  </CardTitle>
+                  <CardDescription>Add up to 5 locations ({getValidLinks().length}/5 added)</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Paste Links */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Paste Google Maps links</Label>
                   <Dialog>
                     <DialogTrigger asChild>
                       <button className="text-primary hover:underline text-xs flex items-center gap-1">
@@ -369,177 +352,169 @@ const Analyze = () => {
                     <DialogContent className="sm:max-w-md">
                       <DialogHeader>
                         <DialogTitle>How to Get Google Maps Links</DialogTitle>
-                        <DialogDescription>
-                          Follow these simple steps to copy a location link
-                        </DialogDescription>
+                        <DialogDescription>Follow these simple steps</DialogDescription>
                       </DialogHeader>
-                      <div className="space-y-4 pt-2">
-                        <div className="space-y-3">
-                          <div className="flex gap-3">
-                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">1</div>
-                            <div>
-                              <p className="font-medium">Search for a place</p>
-                              <p className="text-sm text-muted-foreground">Open Google Maps and search for the business</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-3">
-                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">2</div>
-                            <div>
-                              <p className="font-medium">Select the place</p>
-                              <p className="text-sm text-muted-foreground">Click on it to open the details panel</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-3">
-                            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">3</div>
-                            <div>
-                              <p className="font-medium">Copy the link</p>
-                              <p className="text-sm text-muted-foreground">Click <strong>Share</strong> → <strong>Copy link</strong></p>
-                            </div>
-                          </div>
+                      <div className="space-y-3 pt-2">
+                        <div className="flex gap-3">
+                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">1</div>
+                          <p className="text-sm">Search for a place on Google Maps</p>
+                        </div>
+                        <div className="flex gap-3">
+                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">2</div>
+                          <p className="text-sm">Click on the place to open details</p>
+                        </div>
+                        <div className="flex gap-3">
+                          <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">3</div>
+                          <p className="text-sm">Click <strong>Share</strong> → <strong>Copy link</strong></p>
                         </div>
                       </div>
                     </DialogContent>
                   </Dialog>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Paste Links */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">Paste Google Maps links</Label>
-                  {links.map((link, index) => (
-                    <div key={index} className="flex gap-2">
-                      <Input
-                        placeholder="https://maps.app.goo.gl/..."
-                        value={link}
-                        onChange={(e) => updateLink(index, e.target.value)}
-                        disabled={isAnalyzing}
-                        className={link && !isValidGoogleMapsLink(link) ? "border-destructive" : ""}
-                      />
-                      {(links.length > 1 || link.trim()) && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeLink(index)}
-                          disabled={isAnalyzing}
-                          className="text-muted-foreground hover:text-destructive"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                  {links.length < 5 && (
-                    <Button variant="outline" size="sm" onClick={addLink} disabled={isAnalyzing} className="w-full">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Another Link
-                    </Button>
-                  )}
                 </div>
-
-                {/* Divider */}
-                <div className="flex items-center gap-4">
-                  <div className="flex-1 h-px bg-border"></div>
-                  <span className="text-xs text-muted-foreground">or search to find places</span>
-                  <div className="flex-1 h-px bg-border"></div>
-                </div>
-
-                {/* Search */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <Navigation className="w-4 h-4" />
-                    Find places by description
-                  </Label>
-                  <div className="flex gap-2">
+                {links.map((link, index) => (
+                  <div key={index} className="flex gap-2">
                     <Input
-                      placeholder="e.g., ramen restaurants in Sunnyvale, apartments near Stanford..."
-                      value={locationQuery}
-                      onChange={(e) => setLocationQuery(e.target.value)}
-                      disabled={isAnalyzing || isResolvingLocations}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleResolveLocations();
-                        }
-                      }}
+                      placeholder="https://maps.app.goo.gl/..."
+                      value={link}
+                      onChange={(e) => updateLink(index, e.target.value)}
+                      disabled={isAnalyzing}
+                      className={link && !isValidGoogleMapsLink(link) ? "border-destructive" : ""}
                     />
-                    <Button
-                      variant="outline"
-                      onClick={handleResolveLocations}
-                      disabled={isAnalyzing || isResolvingLocations || !locationQuery.trim()}
-                    >
-                      {isResolvingLocations ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                    </Button>
+                    {(links.length > 1 || link.trim()) && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeLink(index)}
+                        disabled={isAnalyzing}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    AI-powered search. Results may not always be accurate - please verify before using.
-                  </p>
+                ))}
+                {links.length < 5 && (
+                  <Button variant="outline" size="sm" onClick={addLink} disabled={isAnalyzing} className="w-full">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Another Link
+                  </Button>
+                )}
+              </div>
 
-                  {resolvedLocations.length > 0 && (
-                    <div className="space-y-2 pt-2">
-                      <p className="text-xs text-muted-foreground">Click + to add</p>
-                      <div className="space-y-2">
-                        {resolvedLocations.map((location, i) => {
-                          const added = isLocationAdded(location);
-                          return (
-                            <div
-                              key={i}
-                              className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                                added ? "bg-green-500/10 border-green-500/30" : "bg-muted/30 hover:bg-muted/50"
-                              }`}
-                            >
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className={`flex-shrink-0 h-8 w-8 rounded-full ${
-                                  added ? "bg-green-500/20 text-green-600" : "bg-primary/10 hover:bg-primary/20 text-primary"
-                                }`}
-                                onClick={() => !added && addResolvedLocationToLinks(location)}
-                                disabled={added || (links.length >= 5 && !links.some((l) => !l.trim()))}
-                              >
-                                {added ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                              </Button>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium truncate">{location.name}</span>
-                                  {added && (
-                                    <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/30">
-                                      Added
-                                    </Badge>
-                                  )}
-                                </div>
-                                <a
-                                  href={location.mapsUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 truncate"
-                                >
-                                  {location.address}
-                                  <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                                </a>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+              {/* Divider */}
+              <div className="flex items-center gap-4">
+                <div className="flex-1 h-px bg-border"></div>
+                <span className="text-xs text-muted-foreground">or search to find places</span>
+                <div className="flex-1 h-px bg-border"></div>
+              </div>
+
+              {/* Search */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Navigation className="w-4 h-4" />
+                  Find places by description
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g., ramen restaurants in Sunnyvale, apartments near Stanford..."
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    disabled={isAnalyzing || isResolvingLocations}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleResolveLocations();
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={handleResolveLocations}
+                    disabled={isAnalyzing || isResolvingLocations || !locationQuery.trim()}
+                  >
+                    {isResolvingLocations ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+                <p className="text-xs text-muted-foreground">
+                  AI-powered search. Results may not always be accurate - please verify before using.
+                </p>
 
-          {/* Step 2: Preferences */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
+                {resolvedLocations.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <p className="text-xs text-muted-foreground">Click + to add</p>
+                    <div className="space-y-2">
+                      {resolvedLocations.map((location, i) => {
+                        const added = isLocationAdded(location);
+                        return (
+                          <div
+                            key={i}
+                            className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
+                              added ? "bg-green-500/10 border-green-500/30" : "bg-muted/30 hover:bg-muted/50"
+                            }`}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`flex-shrink-0 h-8 w-8 rounded-full ${
+                                added ? "bg-green-500/20 text-green-600" : "bg-primary/10 hover:bg-primary/20 text-primary"
+                              }`}
+                              onClick={() => !added && addResolvedLocationToLinks(location)}
+                              disabled={added || (links.length >= 5 && !links.some((l) => !l.trim()))}
+                            >
+                              {added ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                            </Button>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium truncate">{location.name}</span>
+                                {added && (
+                                  <Badge variant="outline" className="text-xs bg-green-500/10 text-green-600 border-green-500/30">
+                                    Added
+                                  </Badge>
+                                )}
+                              </div>
+                              <a
+                                href={location.mapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 truncate"
+                              >
+                                {location.address}
+                                <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                              </a>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Next Button */}
+              {!showPreferences && (
+                <Button onClick={showPreferencesSection} className="w-full" disabled={!canProceedToPreferences()}>
+                  Continue
+                  <ChevronDown className="w-4 h-4 ml-2" />
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Section 2: Preferences */}
+          {showPreferences && (
+            <div ref={preferencesRef} className="space-y-6 mb-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5" />
-                    What type of places are these?
-                  </CardTitle>
-                  <CardDescription>
-                    Tell us and we'll suggest common things to look for
-                  </CardDescription>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">2</div>
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Building2 className="w-5 h-5" />
+                        What type of places are these?
+                      </CardTitle>
+                      <CardDescription>Tell us and we'll suggest things to look for</CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex gap-2">
@@ -617,9 +592,7 @@ const Analyze = () => {
                     <ThumbsUp className="w-5 h-5 text-green-600" />
                     What do you care about most?
                   </CardTitle>
-                  <CardDescription>
-                    We'll highlight reviews that mention these aspects
-                  </CardDescription>
+                  <CardDescription>We'll highlight reviews that mention these aspects</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {selectedPositive.length > 0 && (
@@ -653,9 +626,7 @@ const Analyze = () => {
                     <AlertTriangle className="w-5 h-5 text-red-500" />
                     Any deal-breakers? (optional)
                   </CardTitle>
-                  <CardDescription>
-                    We'll warn you if reviews mention these issues
-                  </CardDescription>
+                  <CardDescription>We'll warn you if reviews mention these issues</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {selectedNegative.length > 0 && (
@@ -680,106 +651,83 @@ const Analyze = () => {
                     disabled={isAnalyzing}
                     rows={2}
                   />
+
+                  {/* Next Button */}
+                  {!showSubmit && (
+                    <Button onClick={showSubmitSection} className="w-full" disabled={!canProceedToSubmit()}>
+                      Continue
+                      <ChevronDown className="w-4 h-4 ml-2" />
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             </div>
           )}
 
-          {/* Step 3: Review & Submit */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
+          {/* Section 3: Submit */}
+          {showSubmit && (
+            <div ref={submitRef} className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Name your analysis
-                  </CardTitle>
-                  <CardDescription>
-                    Give it a name so you can find it later in your history
-                  </CardDescription>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">3</div>
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="w-5 h-5" />
+                        Name your analysis
+                      </CardTitle>
+                      <CardDescription>Give it a name so you can find it later</CardDescription>
+                    </div>
+                  </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                   <Input
                     placeholder="e.g., Best Italian restaurants in SF, Apartments near work..."
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     disabled={isAnalyzing}
                   />
-                </CardContent>
-              </Card>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Review your analysis</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label className="text-sm text-muted-foreground">Locations to compare</Label>
-                    <p className="font-medium">{getValidLinks().length} place{getValidLinks().length !== 1 ? "s" : ""}</p>
-                  </div>
-                  <div>
-                    <Label className="text-sm text-muted-foreground">Looking for</Label>
-                    <p className="font-medium">
-                      {[...selectedPositive, criteria.trim()].filter(Boolean).join(", ") || "Not specified"}
-                    </p>
-                  </div>
-                  {([...selectedNegative, redFlags.trim()].filter(Boolean).length > 0) && (
-                    <div>
-                      <Label className="text-sm text-muted-foreground">Deal-breakers</Label>
-                      <p className="font-medium text-red-600">
-                        {[...selectedNegative, redFlags.trim()].filter(Boolean).join(", ")}
-                      </p>
+                  <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                    <p className="text-sm font-medium">Summary</p>
+                    <div className="text-sm text-muted-foreground space-y-1">
+                      <p><strong>{getValidLinks().length}</strong> location{getValidLinks().length !== 1 ? "s" : ""} to compare</p>
+                      <p><strong>Looking for:</strong> {[...selectedPositive, criteria.trim()].filter(Boolean).join(", ") || "Not specified"}</p>
+                      {([...selectedNegative, redFlags.trim()].filter(Boolean).length > 0) && (
+                        <p><strong className="text-red-600">Deal-breakers:</strong> {[...selectedNegative, redFlags.trim()].filter(Boolean).join(", ")}</p>
+                      )}
                     </div>
+                  </div>
+
+                  <Button
+                    variant="hero"
+                    size="lg"
+                    className="w-full"
+                    onClick={handleAnalyze}
+                    disabled={isAnalyzing}
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        {loadingMessage}
+                      </>
+                    ) : (
+                      <>
+                        <Search className="w-5 h-5 mr-2" />
+                        Analyze Reviews
+                      </>
+                    )}
+                  </Button>
+
+                  {isAnalyzing && (
+                    <p className="text-center text-sm text-muted-foreground">
+                      This may take a minute. We're fetching and analyzing reviews.
+                    </p>
                   )}
                 </CardContent>
               </Card>
-
-              <Button
-                variant="hero"
-                size="lg"
-                className="w-full"
-                onClick={handleAnalyze}
-                disabled={isAnalyzing}
-              >
-                {isAnalyzing ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    {loadingMessage}
-                  </>
-                ) : (
-                  <>
-                    <Search className="w-5 h-5 mr-2" />
-                    Analyze Reviews
-                  </>
-                )}
-              </Button>
-
-              {isAnalyzing && (
-                <p className="text-center text-sm text-muted-foreground">
-                  This may take a minute. We're fetching and analyzing reviews from all your locations.
-                </p>
-              )}
             </div>
           )}
-
-          {/* Navigation Buttons */}
-          <div className="flex justify-between mt-8">
-            <Button
-              variant="outline"
-              onClick={goToPreviousStep}
-              disabled={currentStep === 1 || isAnalyzing}
-              className={currentStep === 1 ? "invisible" : ""}
-            >
-              <ChevronLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-            {currentStep < 3 && (
-              <Button onClick={goToNextStep} disabled={isAnalyzing}>
-                Next
-                <ChevronRight className="w-4 h-4 ml-2" />
-              </Button>
-            )}
-          </div>
         </div>
       </main>
       <Footer />
