@@ -324,7 +324,7 @@ const Analyze = () => {
           </div>
 
           {/* Section 1: Add Locations */}
-          <Card className="mb-6">
+          <Card className="mb-8">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">1</div>
@@ -506,7 +506,14 @@ const Analyze = () => {
 
           {/* Section 2: Preferences */}
           {showPreferences && (
-            <div ref={preferencesRef} className="space-y-6 mb-6">
+            <div ref={preferencesRef} className="space-y-6 mb-8">
+              {/* Visual separator */}
+              <div className="flex items-center gap-4 py-4">
+                <div className="flex-1 border-t-2 border-dashed border-muted-foreground/30"></div>
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Step 2</span>
+                <div className="flex-1 border-t-2 border-dashed border-muted-foreground/30"></div>
+              </div>
+
               <Card>
                 <CardHeader>
                   <div className="flex items-center gap-2">
@@ -671,6 +678,13 @@ const Analyze = () => {
           {/* Section 3: Submit */}
           {showSubmit && (
             <div ref={submitRef} className="space-y-6">
+              {/* Visual separator */}
+              <div className="flex items-center gap-4 py-4">
+                <div className="flex-1 border-t-2 border-dashed border-muted-foreground/30"></div>
+                <span className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Step 3</span>
+                <div className="flex-1 border-t-2 border-dashed border-muted-foreground/30"></div>
+              </div>
+
               <Card>
                 <CardHeader>
                   <div className="flex items-center gap-2">
