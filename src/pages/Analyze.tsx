@@ -443,7 +443,11 @@ const Analyze = () => {
                   <div className="space-y-2 pt-2">
                     <p className="text-xs text-muted-foreground">Click + to add</p>
                     <div className="space-y-2">
-                      {resolvedLocations.map((location, i) => {
+                      {resolvedLocations
+                        .filter((location, index, self) =>
+                          index === self.findIndex((l) => l.address === location.address)
+                        )
+                        .map((location, i) => {
                         const added = isLocationAdded(location);
                         return (
                           <div
