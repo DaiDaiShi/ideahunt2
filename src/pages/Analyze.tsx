@@ -467,9 +467,12 @@ const Analyze = () => {
                       onClick={handleResolveLocations}
                       disabled={isAnalyzing || isResolvingLocations || !locationQuery.trim()}
                     >
-                      {isResolvingLocations ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                      {isResolvingLocations ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                     </Button>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    AI-powered search. Results may not always be accurate - please verify before using.
+                  </p>
 
                   {resolvedLocations.length > 0 && (
                     <div className="space-y-2 pt-2">
